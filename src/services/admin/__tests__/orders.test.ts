@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { filterOrders, summarizeOrderItems } from '../orders';
+import { buildOrderDeliverySnapshot, buildOrdersOperationalSummary, filterOrders, summarizeOrderItems } from '../orders';
 import type { AdminOrderItemRow, AdminOrderRow } from '../../../pages/admin/admin-types';
 
 const orders: AdminOrderRow[] = [
@@ -25,5 +25,63 @@ test('summarizeOrderItems calcula quantidade total e valor consolidado', () => {
     itemCount: 2,
     quantityTotal: 4,
     amountTotal: 120,
+  });
+});
+
+test('buildOrderDeliverySnapshot resume logística e ações rápidas do pedido', () => {
+  const snapshot = buildOrderDeliverySnapshot({
+    id: '7',
+    order_code: 'TF-777',
+    customer_name: 'Paulo',
+    customer_email: 'paulo@teste.com',
+    customer_phone: '(94) 99123-4567',
+    status: 'Em rota de entrega',
+    total: 150,
+    payment_status: 'Pago',
+    created_at: '2026-05-09T13:00:00Z',
+    delivery_address: {
+      street: 'Rua das Torres',
+      number: '120',
+      neighborhood: 'Cidade Nova',
+      city: 'Parauapebas',
+      driver_name: 'Carlos',
+      occurrence: 'Cliente pediu contato antes da chegada',
+      proofUrl: 'https://cdn.exemplo/prova.jpg',
+    },
+  });
+
+  assert.equal(snapshot.driverName, 'Carlos');
+  assert.equal(snapshot.occurrence, 'Cliente pediu contato antes da chegada');
+  assert.match(snapshot.addressLabel, /Rua das Torres/);
+  assert.equal(snapshot.logisticsStatus, 'Em rota');
+  assert.equal(snapshot.customerPhoneHref, 'tel:94991234567');
+  assert.match(snapshot.mapsUrl || '', /google\.com\/maps\/search/);
+  assert.equal(snapshot.hasDriver, true);
+  assert.equal(snapshot.hasOccurrence, true);
+  assert.equal(snapshot.proofUrl, 'https://cdn.exemplo/prova.jpg');
+});
+
+test('buildOrdersOperationalSummary contabiliza gargalos logísticos da fila', () => {
+  const summary = buildOrdersOperationalSummary([
+    ...orders,
+    {
+      id: '4',
+      order_code: 'TF-103',
+      customer_name: 'Carla',
+      customer_email: 'carla@teste.com',
+      customer_phone: '4',
+      status: 'Pago',
+      total: 95,
+      payment_status: 'Pago',
+      created_at: '2026-05-09T13:30:00Z',
+      delivery_address: { driver_name: 'Marcos', occurrence: 'Portaria fechada' },
+    },
+  ]);
+
+  assert.deepEqual(summary, {
+    total: 4,
+    awaitingAssignment: 2,
+    inTransit: 1,
+    withOccurrence: 1,
   });
 });

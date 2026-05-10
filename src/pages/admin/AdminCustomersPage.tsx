@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { Mail, Phone, ReceiptText, Search, StickyNote, UserRound } from 'lucide-react';
+import { Building2, Mail, Phone, PlusCircle, ReceiptText, Search, UserRound } from 'lucide-react';
 import type { AdminCustomerDraft, AdminCustomerRow, AdminOrderRow } from './admin-types';
 import { buildCustomerInsights, filterCustomers } from '../../services/admin/customers';
 
@@ -9,10 +9,12 @@ type Props = {
   selectedCustomerId: string;
   draftCustomer: AdminCustomerDraft;
   search: string;
+  isCreatingCustomer: boolean;
   onSearchChange: (value: string) => void;
   onSelectCustomer: (customerId: string) => void;
   onDraftChange: (updater: (draft: AdminCustomerDraft) => AdminCustomerDraft) => void;
   onSaveCustomer: () => Promise<void> | void;
+  onCreateCustomer: () => void;
   onOpenOrder: (orderId: string) => void;
 };
 
@@ -22,10 +24,12 @@ export default function AdminCustomersPage({
   selectedCustomerId,
   draftCustomer,
   search,
+  isCreatingCustomer,
   onSearchChange,
   onSelectCustomer,
   onDraftChange,
   onSaveCustomer,
+  onCreateCustomer,
   onOpenOrder,
 }: Props) {
   const filtered = useMemo(() => filterCustomers(customers, search), [customers, search]);
@@ -38,6 +42,7 @@ export default function AdminCustomersPage({
   }, [orders, selectedCustomer]);
   const insights = useMemo(() => buildCustomerInsights(selectedCustomer, orders), [selectedCustomer, orders]);
   const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+  const isCompany = draftCustomer.customer_kind === 'company';
 
   return (
     <div className="space-y-6">
@@ -50,17 +55,30 @@ export default function AdminCustomersPage({
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm flex flex-col min-h-[680px]">
           <div className="p-5 border-b border-gray-100 bg-gray-50/60 space-y-3">
-            <p className="font-black text-gray-900">Base de clientes</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-black text-gray-900">Base de clientes</p>
+                <p className="text-xs text-gray-500 mt-1">Cadastre pessoa física e empresa.</p>
+              </div>
+              <button onClick={onCreateCustomer} className="inline-flex items-center gap-2 rounded-lg bg-brand-black px-3 py-2 text-xs font-bold text-white hover:bg-gray-800 transition-colors">
+                <PlusCircle className="w-4 h-4" /> Cadastrar cliente
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-400" />
-              <input value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Buscar por nome, e-mail ou telefone" className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-orange" />
+              <input value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Buscar por nome, contato, e-mail, telefone ou documento" className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-orange" />
             </div>
           </div>
           <div className="flex-1 overflow-auto divide-y divide-gray-100">
             {filtered.map((customer) => (
               <button key={customer.id} onClick={() => onSelectCustomer(customer.id)} className={`w-full text-left p-4 transition-colors ${selectedCustomerId === customer.id ? 'bg-orange-50' : 'hover:bg-gray-50'}`}>
-                <p className="font-bold text-sm text-gray-900">{customer.name}</p>
-                <p className="text-xs text-gray-500 mt-1">{customer.email || '-'} • {customer.phone || '-'}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-sm text-gray-900">{customer.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">{customer.contact_name || customer.email || '-'} • {customer.phone || '-'}</p>
+                  </div>
+                  <CustomerBadge kind={customer.customer_kind} />
+                </div>
               </button>
             ))}
             {filtered.length === 0 && <div className="p-6 text-sm text-gray-500">Nenhum cliente encontrado para essa busca.</div>}
@@ -72,23 +90,52 @@ export default function AdminCustomersPage({
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>
                 <p className="text-xs font-black uppercase tracking-wider text-gray-500">Cadastro do cliente</p>
-                <h3 className="text-2xl font-black text-gray-900 mt-1">{selectedCustomer?.name || 'Selecione um cliente'}</h3>
+                <h3 className="text-2xl font-black text-gray-900 mt-1">{isCreatingCustomer ? 'Novo cliente' : selectedCustomer?.name || 'Selecione um cliente'}</h3>
+                <p className="text-sm text-gray-500 mt-2">Use esta área para cadastrar clientes em geral e também empresas.</p>
               </div>
-              {selectedCustomer && (
+              {!isCreatingCustomer && selectedCustomer && (
                 <div className="text-right">
                   <p className="text-xs font-bold uppercase text-gray-400">Último pedido</p>
                   <p className="text-sm font-black text-brand-orange mt-1">{insights.lastOrderCode || 'Sem pedidos'}</p>
+                  <div className="mt-2 flex justify-end">
+                    <CustomerBadge kind={selectedCustomer.customer_kind} />
+                  </div>
                 </div>
               )}
             </div>
 
-            {!selectedCustomer ? (
-              <p className="text-sm text-gray-500">Selecione um cliente para visualizar e editar os dados cadastrais.</p>
+            {!selectedCustomer && !isCreatingCustomer ? (
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 p-6 text-sm text-gray-600 space-y-4">
+                <p>Selecione um cliente para editar ou clique em <strong>Cadastrar cliente</strong> para criar um novo cadastro.</p>
+                <button onClick={onCreateCustomer} className="inline-flex items-center gap-2 rounded-xl bg-brand-black px-4 py-3 text-sm font-bold text-white hover:bg-gray-800 transition-colors">
+                  <PlusCircle className="w-4 h-4" /> Abrir cadastro de cliente
+                </button>
+              </div>
             ) : (
               <div className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onDraftChange((draft) => ({ ...draft, customer_kind: 'person', contact_name: draft.customer_kind === 'company' ? '' : draft.contact_name }))}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${!isCompany ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                  >
+                    <p className="font-black text-sm">Pessoa física</p>
+                    <p className="text-xs mt-1 opacity-80">Cliente individual, consumidor final.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDraftChange((draft) => ({ ...draft, customer_kind: 'company' }))}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${isCompany ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                  >
+                    <p className="font-black text-sm">Empresa</p>
+                    <p className="text-xs mt-1 opacity-80">Cadastre CNPJ e contato responsável.</p>
+                  </button>
+                </div>
+
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Input icon={<UserRound className="w-4 h-4" />} label="Nome" value={draftCustomer.name} onChange={(value) => onDraftChange((draft) => ({ ...draft, name: value }))} />
-                  <Input icon={<ReceiptText className="w-4 h-4" />} label="Documento" value={draftCustomer.document} onChange={(value) => onDraftChange((draft) => ({ ...draft, document: value }))} />
+                  <Input icon={isCompany ? <Building2 className="w-4 h-4" /> : <UserRound className="w-4 h-4" />} label={isCompany ? 'Razão social / nome da empresa' : 'Nome completo'} value={draftCustomer.name} onChange={(value) => onDraftChange((draft) => ({ ...draft, name: value }))} />
+                  <Input icon={<ReceiptText className="w-4 h-4" />} label={isCompany ? 'CNPJ' : 'CPF / documento'} value={draftCustomer.document} onChange={(value) => onDraftChange((draft) => ({ ...draft, document: value }))} />
+                  {isCompany && <Input icon={<UserRound className="w-4 h-4" />} label="Contato responsável" value={draftCustomer.contact_name} onChange={(value) => onDraftChange((draft) => ({ ...draft, contact_name: value }))} />}
                   <Input icon={<Mail className="w-4 h-4" />} label="E-mail" value={draftCustomer.email} onChange={(value) => onDraftChange((draft) => ({ ...draft, email: value }))} />
                   <Input icon={<Phone className="w-4 h-4" />} label="Telefone" value={draftCustomer.phone} onChange={(value) => onDraftChange((draft) => ({ ...draft, phone: value }))} />
                 </div>
@@ -96,7 +143,7 @@ export default function AdminCustomersPage({
                   <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Anotações internas</label>
                   <textarea value={draftCustomer.notes} onChange={(e) => onDraftChange((draft) => ({ ...draft, notes: e.target.value }))} rows={4} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-orange" />
                 </div>
-                <button onClick={() => void onSaveCustomer()} className="bg-brand-black hover:bg-gray-800 transition-colors text-white px-5 py-3 rounded-xl text-sm font-bold">Salvar cliente</button>
+                <button onClick={() => void onSaveCustomer()} className="bg-brand-black hover:bg-gray-800 transition-colors text-white px-5 py-3 rounded-xl text-sm font-bold">{isCreatingCustomer ? 'Criar cliente' : 'Salvar cliente'}</button>
               </div>
             )}
           </div>
@@ -106,8 +153,8 @@ export default function AdminCustomersPage({
               <h3 className="font-black text-lg text-gray-900">Histórico de pedidos</h3>
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{customerOrders.length} pedidos</span>
             </div>
-            {!selectedCustomer ? (
-              <p className="text-sm text-gray-500">Selecione um cliente para ver o histórico.</p>
+            {!selectedCustomer || isCreatingCustomer ? (
+              <p className="text-sm text-gray-500">Selecione um cliente salvo para ver o histórico.</p>
             ) : customerOrders.length === 0 ? (
               <p className="text-sm text-gray-500">Nenhum pedido encontrado para este cliente.</p>
             ) : (
@@ -165,4 +212,9 @@ function Input({ label, value, onChange, icon }: { label: string; value: string;
       </div>
     </div>
   );
+}
+
+function CustomerBadge({ kind }: { kind: 'person' | 'company' }) {
+  const tones = kind === 'company' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700';
+  return <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${tones}`}>{kind === 'company' ? 'Empresa' : 'Pessoa'}</span>;
 }

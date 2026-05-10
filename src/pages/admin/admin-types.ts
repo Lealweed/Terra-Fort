@@ -27,7 +27,9 @@ export type InventoryMovementRow = {
 
 export type AdminCustomerRow = {
   id: string;
+  customer_kind: 'person' | 'company';
   name: string;
+  contact_name: string | null;
   email: string | null;
   phone: string | null;
   document: string | null;
@@ -36,7 +38,9 @@ export type AdminCustomerRow = {
 };
 
 export type AdminCustomerDraft = {
+  customer_kind: 'person' | 'company';
   name: string;
+  contact_name: string;
   email: string;
   phone: string;
   document: string;

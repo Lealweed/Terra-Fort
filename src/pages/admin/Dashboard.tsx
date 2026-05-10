@@ -3,7 +3,7 @@ import { AlertTriangle, FileText, PackageCheck, Settings, Truck, Users, Wrench, 
 import { supabase } from '../../lib/supabase';
 import type { AdminCustomerDraft, AdminCustomerRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow, InventoryMovementRow, ProductDraft, ProductRow } from './admin-types';
 import { createProduct as createProductRecord, deleteProduct as deleteProductRecord, emptyProductDraft, listProducts, toProductDraft, updateProduct as updateProductRecord, uploadProductImage } from '../../services/admin/products';
-import { listCustomers, toCustomerDraft, updateCustomer as updateCustomerRecord } from '../../services/admin/customers';
+import { createCustomer as createCustomerRecord, listCustomers, toCustomerDraft, updateCustomer as updateCustomerRecord, validateCustomerDraft } from '../../services/admin/customers';
 import { listOrderEvents, listOrderItems, updateOrderStatusRecord } from '../../services/admin/orders';
 import { saveDeliveryMetaRecord, updateDeliveryStatusRecord } from '../../services/admin/delivery';
 import { buildFinanceSummary } from '../../services/admin/finance';
@@ -69,6 +69,7 @@ export default function Dashboard() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const [draftProduct, setDraftProduct] = useState<ProductDraft>(emptyProductDraft);
   const [draftCustomer, setDraftCustomer] = useState<AdminCustomerDraft>(toCustomerDraft());
   const [productMovements, setProductMovements] = useState<InventoryMovementRow[]>([]);
@@ -198,22 +199,41 @@ export default function Dashboard() {
   }, [selectedOrderId]);
 
   useEffect(() => {
-    if (selectedCustomer) {
+    if (isCreatingCustomer) {
+      setDraftCustomer(toCustomerDraft());
+    } else if (selectedCustomer) {
       setDraftCustomer(toCustomerDraft(selectedCustomer));
     } else {
       setDraftCustomer(toCustomerDraft());
     }
-  }, [selectedCustomerId, selectedCustomer]);
+  }, [isCreatingCustomer, selectedCustomerId, selectedCustomer]);
 
   const saveCustomer = async () => {
-    if (!selectedCustomerId) return;
+    setMsg('');
+    const validationError = validateCustomerDraft(draftCustomer);
+    if (validationError) return setMsg(validationError);
+
     try {
-      await updateCustomerRecord(selectedCustomerId, draftCustomer);
-      setMsg('Cliente atualizado com sucesso.');
+      if (isCreatingCustomer) {
+        const created = await createCustomerRecord(draftCustomer);
+        setSelectedCustomerId(created.id);
+        setIsCreatingCustomer(false);
+        setMsg('Cliente criado com sucesso.');
+      } else {
+        if (!selectedCustomerId) return setMsg('Selecione um cliente para salvar.');
+        await updateCustomerRecord(selectedCustomerId, draftCustomer);
+        setMsg('Cliente atualizado com sucesso.');
+      }
       await loadCustomers();
     } catch (error: any) {
       setMsg(`Erro ao salvar cliente: ${error.message}`);
     }
+  };
+
+  const handleNewCustomer = () => {
+    setSelectedCustomerId('');
+    setIsCreatingCustomer(true);
+    setDraftCustomer(toCustomerDraft());
   };
 
   const saveStockAdjustment = async (movementType: InventoryAdjustmentType, quantity: number, reason: string) => {
@@ -633,6 +653,7 @@ export default function Dashboard() {
             onStatusFilterChange={setOrderStatusFilter}
             onSelectOrder={setSelectedOrderId}
             onUpdateOrderStatus={updateOrderStatus}
+            onOpenDeliveryTab={() => setActiveTab('delivery')}
           />
         )}
 
@@ -653,9 +674,14 @@ export default function Dashboard() {
             draftCustomer={draftCustomer}
             search={customerSearch}
             onSearchChange={setCustomerSearch}
-            onSelectCustomer={setSelectedCustomerId}
+            onSelectCustomer={(customerId) => {
+              setSelectedCustomerId(customerId);
+              setIsCreatingCustomer(false);
+            }}
             onDraftChange={(updater) => setDraftCustomer((current) => updater(current))}
             onSaveCustomer={saveCustomer}
+            onCreateCustomer={handleNewCustomer}
+            isCreatingCustomer={isCreatingCustomer}
             onOpenOrder={(orderId) => {
               setSelectedOrderId(orderId);
               setActiveTab('orders');

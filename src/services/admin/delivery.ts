@@ -12,6 +12,44 @@ export function buildDeliveryDraft(deliveryAddress: any): DeliveryDraft {
   };
 }
 
+export function summarizeDeliveryAddress(deliveryAddress: any) {
+  if (!deliveryAddress) return 'Endereço não informado';
+  if (typeof deliveryAddress === 'string') return deliveryAddress.trim() || 'Endereço não informado';
+  if (typeof deliveryAddress !== 'object') return 'Endereço não informado';
+
+  const preferredFields = [
+    deliveryAddress.street,
+    deliveryAddress.number,
+    deliveryAddress.complement,
+    deliveryAddress.neighborhood,
+    deliveryAddress.city,
+    deliveryAddress.state,
+  ];
+
+  const preferred = preferredFields
+    .map((value) => (typeof value === 'string' ? value.trim() : String(value || '').trim()))
+    .filter(Boolean);
+
+  if (preferred.length > 0) return preferred.join(', ');
+
+  const fallback = Object.values(deliveryAddress)
+    .map((value) => (typeof value === 'string' ? value.trim() : String(value || '').trim()))
+    .filter(Boolean);
+
+  return fallback.length > 0 ? fallback.join(', ') : 'Endereço não informado';
+}
+
+export function buildMapsSearchUrl(deliveryAddress: any) {
+  const label = summarizeDeliveryAddress(deliveryAddress);
+  if (!label || label === 'Endereço não informado') return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}`;
+}
+
+export function buildPhoneHref(phone: string | null | undefined) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits ? `tel:${digits}` : null;
+}
+
 export function mergeDeliveryAddressMeta(base: any, driverName: string, note: string) {
   const safeBase = base && typeof base === 'object' ? base : {};
   return {
