@@ -1,12 +1,33 @@
-import { Hammer, Menu, ShoppingCart, User } from 'lucide-react';
+import { Menu, ShoppingCart, User, Truck, Users, LogIn, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../contexts/CartContext';
+import { supabase } from '../lib/supabase';
+import { useEffect, useState } from 'react';
 
 export default function Navbar() {
   const { cartCount, setIsCartOpen } = useCart();
+  const [isLogged, setIsLogged] = useState(false);
+  const [isAtTop, setIsAtTop] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setIsLogged(!!data.session));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setIsLogged(!!session));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setIsAtTop(window.scrollY <= 4);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   return (
-    <nav className="bg-[#111111]/95 backdrop-blur-md text-white sticky top-0 z-50 border-b border-white/5 shadow-sm transition-all duration-300">
+    <nav className={`bg-[#111111]/95 backdrop-blur-md text-white fixed top-0 left-0 right-0 z-50 border-b border-white/5 shadow-sm transition-all duration-300 ${isAtTop ? 'translate-y-0' : '-translate-y-full'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
           <div className="flex items-center gap-3">
@@ -29,10 +50,29 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-4 md:gap-6">
+            <Link to="/portal-cliente" className="text-sm font-medium hover:text-brand-orange active:scale-95 transition-all flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              <span className="hidden sm:inline">Cliente</span>
+            </Link>
+            <Link to="/portal-entregador" className="text-sm font-medium hover:text-brand-orange active:scale-95 transition-all flex items-center gap-2">
+              <Truck className="w-5 h-5" />
+              <span className="hidden sm:inline">Entregador</span>
+            </Link>
             <Link to="/admin/dashboard" className="text-sm font-medium hover:text-brand-orange active:scale-95 transition-all flex items-center gap-2">
               <User className="w-5 h-5" />
-              <span className="hidden sm:inline">Portal Admin</span>
+              <span className="hidden sm:inline">Admin</span>
             </Link>
+            {isLogged ? (
+              <button onClick={handleLogout} className="text-sm font-medium hover:text-brand-orange active:scale-95 transition-all flex items-center gap-2">
+                <LogOut className="w-5 h-5" />
+                <span className="hidden sm:inline">Sair</span>
+              </button>
+            ) : (
+              <Link to="/login" className="text-sm font-medium hover:text-brand-orange active:scale-95 transition-all flex items-center gap-2">
+                <LogIn className="w-5 h-5" />
+                <span className="hidden sm:inline">Entrar</span>
+              </Link>
+            )}
             <button 
               onClick={() => setIsCartOpen(true)}
               className="bg-brand-orange text-brand-black px-3 py-2 rounded-sm mx-1 hover:bg-orange-600 hover:-translate-y-0.5 shadow-sm hover:shadow-orange-500/20 active:scale-95 transition-all flex items-center gap-2 font-bold"

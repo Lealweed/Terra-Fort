@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Clock, MapPin, Phone, Search, Zap, Droplet, Hammer, Paintbrush, LayoutGrid, Truck, CreditCard } from 'lucide-react';
+import { Clock, Search, Zap, Droplet, Hammer, Paintbrush, LayoutGrid, Truck, CreditCard } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
-import { mockProducts } from '../lib/mockData';
+import { getProducts } from '../lib/products';
+import { Product } from '../types';
+import { getHomeContent } from '../lib/content';
 
 const categoryConfig = [
   { id: 'Todos', icon: LayoutGrid },
@@ -15,12 +17,35 @@ const categoryConfig = [
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('Todos');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [heroTitle, setHeroTitle] = useState('Força e Construção na Medida Certa.');
+  const [heroSubtitle, setHeroSubtitle] = useState('A maior variedade de materiais para sua obra em Parauapebas. Do alicerce ao acabamento.');
+  const [homeFeatures, setHomeFeatures] = useState<string[]>(['Entrega Expressa', 'Pagamento Facilitado', 'Atendimento Zap']);
+  const [tickerItems, setTickerItems] = useState<any[]>([]);
 
-  const filteredProducts = mockProducts.filter(product => {
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([getProducts(), getHomeContent()]).then(([productsData, content]) => {
+      if (!mounted) return;
+      setProducts(productsData);
+      setHeroTitle(content.heroTitle);
+      setHeroSubtitle(content.heroSubtitle);
+      setHomeFeatures(content.features);
+      setTickerItems(content.tickerItems);
+      setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredProducts = useMemo(() => products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = activeCategory === 'Todos' || product.category === activeCategory;
     return matchesSearch && matchesCategory;
-  });
+  }), [products, searchTerm, activeCategory]);
 
   return (
     <div className="w-full">
@@ -49,11 +74,9 @@ export default function Home() {
               className="flex-1 space-y-6"
             >
               <h1 className="font-heading text-4xl sm:text-5xl md:text-7xl font-black uppercase tracking-tight leading-[1.05] break-words">
-                Força e <span className="text-brand-orange">Construção</span><br />na Medida Certa.
+                {heroTitle}
               </h1>
-              <p className="text-xl text-gray-400 max-w-xl">
-                A maior variedade de materiais para sua obra em Parauapebas. Do alicerce ao acabamento.
-              </p>
+              <p className="text-xl text-gray-400 max-w-xl">{heroSubtitle}</p>
             </motion.div>
             {/* Optional Image or Hero Graphic could go here */}
           </div>
@@ -68,26 +91,32 @@ export default function Home() {
               <span className="mx-6 font-black uppercase tracking-wider flex items-center gap-2">
                 <Zap className="w-5 h-5" /> Ofertas da Semana
               </span>
-              <span className="mx-6 font-medium flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1541888087401-dc91a27e7cb2?q=80&w=100&auto=format&fit=crop" alt="Cimento" className="w-8 h-8 rounded-full border-2 border-white object-cover" />
-                Cimento CP II <strong className="font-black ml-1 text-white">R$ 38,90</strong>
-              </span>
+              {tickerItems[0] && (
+                <span className="mx-6 font-medium flex items-center gap-3">
+                  <img src={tickerItems[0].imageUrl} alt={tickerItems[0].text} className="w-8 h-8 rounded-full border-2 border-white object-cover" />
+                  {tickerItems[0].text} <strong className="font-black ml-1 text-white">{tickerItems[0].price}</strong>
+                </span>
+              )}
               <span className="mx-6 font-black uppercase tracking-wider flex items-center gap-2">
-                <Truck className="w-5 h-5" /> Entrega Rápida
+                <Truck className="w-5 h-5" /> {homeFeatures[0] || 'Entrega Rápida'}
               </span>
-              <span className="mx-6 font-medium flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1549488344-1f9b8d2bd1f3?q=80&w=100&auto=format&fit=crop" alt="Porcelanato" className="w-8 h-8 rounded-full border-2 border-white object-cover" />
-                Porcelanato Bianco <strong className="font-black ml-1 text-white">R$ 59,90/m²</strong>
-              </span>
+              {tickerItems[1] && (
+                <span className="mx-6 font-medium flex items-center gap-3">
+                  <img src={tickerItems[1].imageUrl} alt={tickerItems[1].text} className="w-8 h-8 rounded-full border-2 border-white object-cover" />
+                  {tickerItems[1].text} <strong className="font-black ml-1 text-white">{tickerItems[1].price}</strong>
+                </span>
+              )}
               <span className="mx-6 font-black uppercase tracking-wider flex items-center gap-2">
                 <Clock className="w-5 h-5" /> Aberto das 07:30 às 18:00
               </span>
-              <span className="mx-6 font-medium flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1584620658428-ee1bc4b533db?q=80&w=100&auto=format&fit=crop" alt="Argamassa" className="w-8 h-8 rounded-full border-2 border-white object-cover" />
-                Argamassa ACIII <strong className="font-black ml-1 text-white">R$ 29,90</strong>
-              </span>
+              {tickerItems[2] && (
+                <span className="mx-6 font-medium flex items-center gap-3">
+                  <img src={tickerItems[2].imageUrl} alt={tickerItems[2].text} className="w-8 h-8 rounded-full border-2 border-white object-cover" />
+                  {tickerItems[2].text} <strong className="font-black ml-1 text-white">{tickerItems[2].price}</strong>
+                </span>
+              )}
               <span className="mx-6 font-black uppercase tracking-wider flex items-center gap-2">
-                <CreditCard className="w-5 h-5" /> Parcele em até 6x
+                <CreditCard className="w-5 h-5" /> {homeFeatures[1] || 'Parcele em até 6x'}
               </span>
             </div>
           ))}
@@ -164,7 +193,11 @@ export default function Home() {
         </div>
 
         {/* Product Grid */}
-        {filteredProducts.length > 0 ? (
+        {loading ? (
+          <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-gray-200">
+            <h3 className="text-xl font-bold mb-2">Carregando produtos...</h3>
+          </div>
+        ) : filteredProducts.length > 0 ? (
           <motion.div 
             layout
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"

@@ -2,6 +2,7 @@ import { MessageCircle, ShoppingBag, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
+import SafeImage from './SafeImage';
 
 interface ProductCardProps {
   product: Product;
@@ -40,10 +41,10 @@ export default function ProductCard({ product }: ProductCardProps) {
         {product.image_url ? (
           <>
             <div className="absolute inset-0 bg-brand-black/5 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
-            <img 
-              src={product.image_url} 
-              alt={product.name} 
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out z-0 mix-blend-multiply" 
+            <SafeImage
+              src={product.image_url}
+              alt={product.name}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out z-0 mix-blend-multiply"
             />
           </>
         ) : (

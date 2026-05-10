@@ -15,7 +15,7 @@ export default function MainLayout() {
     <div className="min-h-screen flex flex-col font-sans">
       <Navbar />
       <CartDrawer />
-      <main className="flex-grow">
+      <main className="flex-grow pt-20">
         <Outlet />
       </main>
       <footer className="bg-brand-black bg-grid-pattern text-gray-400 py-12 border-t-8 border-brand-orange mt-auto relative overflow-hidden">

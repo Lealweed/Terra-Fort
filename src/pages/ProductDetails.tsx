@@ -1,18 +1,48 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MessageCircle, ShoppingBag, ArrowLeft, ShieldCheck, Truck, Package, Play, ChevronRight, Plus, Minus } from 'lucide-react';
-import { mockProducts } from '../lib/mockData';
+import { getProductById } from '../lib/products';
 import { useCart } from '../contexts/CartContext';
+import SafeImage from '../components/SafeImage';
+import { Product } from '../types';
 
 export default function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
-  const product = mockProducts.find(p => p.id === id);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+
+    getProductById(id).then((data) => {
+      if (!mounted) return;
+      setProduct(data);
+      setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+        <h2 className="text-2xl font-bold mb-4">Carregando produto...</h2>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -95,10 +125,10 @@ export default function ProductDetails() {
                         className="w-full h-full object-contain"
                       />
                     ) : (
-                      <img 
-                        src={allMedia[activeImage]} 
-                        alt={product.name} 
-                        className="w-full h-full object-contain p-4" 
+                      <SafeImage
+                        src={allMedia[activeImage]}
+                        alt={product.name}
+                        className="w-full h-full object-contain p-4"
                       />
                     )}
                   </>
@@ -131,7 +161,7 @@ export default function ProductDetails() {
                           <Play className="w-6 h-6 text-gray-500" fill="currentColor" />
                         </div>
                       ) : (
-                        <img src={media} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+                        <SafeImage src={media} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
                       )}
                     </button>
                   ))}

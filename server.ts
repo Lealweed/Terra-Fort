@@ -1,104 +1,106 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Stripe from "stripe";
 import path from "path";
 import process from "process";
 import { fileURLToPath } from "url";
+import { buildAgentContext } from "./api/_agentContext.js";
+import { requireIntegrationAccess } from "./api/_integrationAuth.js";
+import { getStripe } from "./api/_stripe.js";
+import { createCheckoutSession } from "./src/server-core/checkout.js";
+import { createPaymentLink } from "./src/server-core/payment-link.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let stripeClient: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!stripeClient) {
-    const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) {
-      throw new Error("STRIPE_SECRET_KEY environment variable is required");
-    }
-    stripeClient = new Stripe(key);
-  }
-  return stripeClient;
-}
-
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
+
+  app.post("/api/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    try {
+      const stripe = getStripe();
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+      if (!webhookSecret) {
+        return res.status(500).json({ error: "Missing STRIPE_WEBHOOK_SECRET" });
+      }
+
+      const signature = req.headers["stripe-signature"];
+      if (!signature || typeof signature !== "string") {
+        return res.status(400).json({ error: "Missing stripe-signature header" });
+      }
+
+      const event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object as any;
+        console.log("[webhook] checkout.session.completed", {
+          sessionId: session.id,
+          paymentStatus: session.payment_status,
+          orderRef: session.metadata?.orderRef,
+        });
+      }
+
+      return res.json({ received: true });
+    } catch (error: any) {
+      return res.status(400).json({ error: error.message || "Webhook validation failed" });
+    }
+  });
 
   app.use(express.json());
 
-  // API Routes
+  app.all("/api/agent-context", async (req, res) => {
+    const auth = requireIntegrationAccess(req);
+    if (auth.ok === false) {
+      return res.status(auth.status).json({ error: auth.error });
+    }
+
+    if (req.method !== "GET" && req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    try {
+      const input = req.method === "GET" ? req.query || {} : req.body || {};
+      const context = await buildAgentContext({
+        phone: typeof input.phone === "string" ? input.phone : undefined,
+        email: typeof input.email === "string" ? input.email : undefined,
+        orderCode: typeof input.orderCode === "string" ? input.orderCode : undefined,
+        productQuery: typeof input.productQuery === "string" ? input.productQuery : undefined,
+      });
+      return res.json(context);
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message || "Failed to build agent context" });
+    }
+  });
+
   app.post("/api/checkout", async (req, res) => {
     try {
-      const { items } = req.body;
-      const stripe = getStripe();
-
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ error: "Invalid items" });
-      }
-
-      const lineItems = items.map((item: any) => {
-        return {
-          price_data: {
-            currency: "brl",
-            product_data: {
-              name: item.name,
-              images: item.image_url ? [item.image_url] : [],
-            },
-            unit_amount: Math.round(item.price * 100),
-          },
-          quantity: item.cartQuantity || 1,
-        };
+      const result = await createCheckoutSession(req.body || {}, {
+        stripe: getStripe(),
+        appUrl: process.env.APP_URL || `http://localhost:${PORT}`,
       });
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card', 'boleto', 'pix'],
-        line_items: lineItems,
-        mode: "payment",
-        success_url: `${process.env.APP_URL || `http://localhost:${PORT}`}/success`,
-        cancel_url: `${process.env.APP_URL || `http://localhost:${PORT}`}/`,
-      });
-
-      res.json({ id: session.id, url: session.url });
+      res.status(result.status).json(result.body);
     } catch (error: any) {
-      console.error("Stripe error:", error);
+      console.error("Stripe checkout error:", error);
       res.status(500).json({ error: error.message || "Failed to create checkout session" });
     }
   });
 
   app.post("/api/create-payment-link", async (req, res) => {
     try {
-      const { amount, description } = req.body;
-      const stripe = getStripe();
-
-      if (!amount || isNaN(amount)) {
-        return res.status(400).json({ error: "Invalid amount" });
-      }
-
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card', 'boleto', 'pix'],
-        line_items: [{
-          price_data: {
-            currency: "brl",
-            product_data: {
-              name: description || "Pagamento de Pedido",
-            },
-            unit_amount: Math.round(amount * 100),
-          },
-          quantity: 1,
-        }],
-        mode: "payment",
-        success_url: `${process.env.APP_URL || `http://localhost:${PORT}`}/success`,
-        cancel_url: `${process.env.APP_URL || `http://localhost:${PORT}`}/`,
+      const result = await createPaymentLink(req.body || {}, {
+        stripe: getStripe(),
+        appUrl: process.env.APP_URL || `http://localhost:${PORT}`,
       });
 
-      res.json({ url: session.url });
+      res.status(result.status).json(result.body);
     } catch (error: any) {
-      console.error("Stripe error:", error);
+      console.error("Stripe payment-link error:", error);
       res.status(500).json({ error: error.message || "Failed to create checkout session" });
     }
   });
 
-  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -108,7 +110,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

@@ -4,6 +4,7 @@ import { formatPrice } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
 
@@ -97,14 +98,80 @@ export default function CartDrawer() {
       const stripe = await stripePromise;
       if (!stripe) throw new Error("Stripe is not initialized");
 
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const { data: authData } = await supabase.auth.getUser();
+      const customerEmail = authData.user?.email || null;
+
+      let customerId: string | null = null;
+      if (customerEmail) {
+        const { data: existingCustomer } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('email', customerEmail)
+          .maybeSingle();
+
+        if (existingCustomer?.id) {
+          customerId = existingCustomer.id;
+          await supabase.from('customers').update({ name: formData.name, phone: formData.phone }).eq('id', customerId);
+        } else {
+          const { data: createdCustomer } = await supabase
+            .from('customers')
+            .insert({ name: formData.name, email: customerEmail, phone: formData.phone })
+            .select('id')
+            .single();
+          customerId = createdCustomer?.id || null;
+        }
+      }
+
+      const orderPayload = {
+        customer_id: customerId,
+        customer_name: formData.name,
+        customer_phone: formData.phone,
+        customer_email: customerEmail,
+        status: 'Pendente',
+        payment_status: 'Pendente',
+        subtotal: cartTotal || 0,
+        freight: 0,
+        discount: 0,
+        total: cartTotal || 0,
+        delivery_address: {
+          cep: formData.cep,
+          address: formData.address,
+          number: formData.number,
+          complement: formData.complement,
+          neighborhood: formData.neighborhood,
+          city: formData.city,
         },
-        body: JSON.stringify({ 
+        notes: 'Criado via checkout web',
+      };
+
+      const { data: createdOrder, error: orderError } = await supabase
+        .from('orders')
+        .insert(orderPayload)
+        .select('id')
+        .single();
+
+      if (orderError) throw orderError;
+
+      const orderItemsPayload = validCartItems.map((item) => ({
+        order_id: createdOrder.id,
+        product_id: item.id,
+        product_name: item.name,
+        unit_price: item.price,
+        quantity: item.cartQuantity || 1,
+      }));
+
+      const { error: itemError } = await supabase.from('order_items').insert(orderItemsPayload);
+      if (itemError) throw itemError;
+
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           items: validCartItems,
-          customer: formData
+          customer: formData,
+          orderRef: createdOrder.id,
         }),
       });
 
@@ -114,9 +181,11 @@ export default function CartDrawer() {
         throw new Error(session.error);
       }
 
-      await stripe.redirectToCheckout({
-        sessionId: session.id,
-      });
+      const stripeAny = stripe as unknown as { redirectToCheckout?: (args: { sessionId: string }) => Promise<unknown> };
+      if (!stripeAny.redirectToCheckout) {
+        throw new Error('Método redirectToCheckout indisponível nesta versão do Stripe JS');
+      }
+      await stripeAny.redirectToCheckout({ sessionId: session.id });
     } catch (error) {
       console.error("Stripe checkout error:", error);
       alert("Houve um erro ao processar o pagamento. Por favor, tente novamente.");
