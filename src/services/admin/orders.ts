@@ -109,3 +109,47 @@ export async function updateOrderStatusRecord(orderId: string, status: string) {
 
   if (eventError) throw eventError;
 }
+
+export type AdminOrderDraft = {
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string;
+  payment_status: string;
+  items: { product_id: string; product_name: string; unit_price: number; quantity: number }[];
+};
+
+export async function createAdminOrderRecord(draft: AdminOrderDraft) {
+  const supabase = await getSupabase();
+  
+  const total = draft.items.reduce((acc, item) => acc + (item.unit_price * item.quantity), 0);
+
+  const { data: order, error: orderError } = await supabase.from('orders').insert({
+    customer_name: draft.customer_name,
+    customer_phone: draft.customer_phone,
+    customer_email: draft.customer_email,
+    payment_status: draft.payment_status,
+    status: 'Pendente',
+    total,
+    subtotal: total,
+    freight: 0,
+    discount: 0,
+    notes: 'Criado manualmente pelo Dashboard'
+  }).select('id').single();
+
+  if (orderError) throw orderError;
+
+  const itemsPayload = draft.items.map(item => ({
+    order_id: order.id,
+    product_id: item.product_id,
+    product_name: item.product_name,
+    unit_price: item.unit_price,
+    quantity: item.quantity,
+  }));
+
+  if (itemsPayload.length > 0) {
+    const { error: itemsError } = await supabase.from('order_items').insert(itemsPayload);
+    if (itemsError) throw itemsError;
+  }
+
+  return order.id;
+}

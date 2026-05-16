@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Clock3, PackageCheck, Truck, Wallet, MapPin, Phone, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Clock3, PackageCheck, Truck, Wallet, MapPin, Phone, ChevronRight, CheckCircle2, ArrowLeft, RadioReceiver, Navigation } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { Link } from 'react-router-dom';
 
 type Etapa = 'Recebido' | 'Em separação' | 'Em rota' | 'Entregue';
 
@@ -14,7 +15,8 @@ type Pedido = {
   motorista?: string;
   telefone?: string;
   itens: { nome: string; qtd: number }[];
-  historico: { etapa: Etapa; horario: string }[];
+  historico: { etapa: Etapa; horario: string, description?: string }[];
+  location?: { lat: number, lng: number, timestamp: string };
 };
 
 const pedidosMock: Pedido[] = [
@@ -33,38 +35,6 @@ const pedidosMock: Pedido[] = [
       { etapa: 'Em separação', horario: 'Hoje, 10:11' },
     ],
   },
-  {
-    id: 'TF-1018',
-    status: 'Em rota',
-    total: 1240,
-    previsao: 'Hoje, 14:10',
-    endereco: 'Bairro Cidade Nova, QD 12',
-    motorista: 'Carlos',
-    telefone: '(94) 99999-3412',
-    itens: [
-      { nome: 'Porcelanato Calacata 84x84', qtd: 12 },
-      { nome: 'Rejunte Flexível', qtd: 8 },
-    ],
-    historico: [
-      { etapa: 'Recebido', horario: 'Hoje, 08:20' },
-      { etapa: 'Em separação', horario: 'Hoje, 09:00' },
-      { etapa: 'Em rota', horario: 'Hoje, 12:52' },
-    ],
-  },
-  {
-    id: 'TF-1003',
-    status: 'Entregue',
-    total: 212.5,
-    previsao: '02/05 10:45',
-    endereco: 'Av. Liberdade, 2200',
-    itens: [{ nome: 'Tubo PVC 25mm', qtd: 10 }],
-    historico: [
-      { etapa: 'Recebido', horario: '02/05 08:10' },
-      { etapa: 'Em separação', horario: '02/05 08:40' },
-      { etapa: 'Em rota', horario: '02/05 09:30' },
-      { etapa: 'Entregue', horario: '02/05 10:45' },
-    ],
-  },
 ];
 
 const etapas: Etapa[] = ['Recebido', 'Em separação', 'Em rota', 'Entregue'];
@@ -72,7 +42,7 @@ const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', c
 const progresso = (status: Etapa) => ((etapas.indexOf(status) + 1) / etapas.length) * 100;
 const dt = (value?: string) => {
   if (!value) return '-';
-  return new Date(value).toLocaleString('pt-BR');
+  return new Date(value).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
 
 function mapStatus(status?: string): Etapa {
@@ -122,15 +92,30 @@ async function loadPedidos(): Promise<Pedido[]> {
     grouped.set(it.order_id, arr);
   });
 
-  const eventsByOrder = new Map<string, { etapa: Etapa; horario: string }[]>();
+  const eventsByOrder = new Map<string, { etapa: Etapa; horario: string, description?: string }[]>();
+  const locationsByOrder = new Map<string, { lat: number, lng: number, timestamp: string }>();
+
   (events || []).forEach((ev: any) => {
-    const txt = `${ev.event_type || ''} ${ev.description || ''}`.toLowerCase();
+    if (ev.event_type === 'location_update') {
+      const match = ev.description?.match(/(-?\\d+\\.\\d+),\\s*(-?\\d+\\.\\d+)/);
+      if (match) {
+        locationsByOrder.set(ev.order_id, {
+          lat: parseFloat(match[1]),
+          lng: parseFloat(match[2]),
+          timestamp: ev.created_at
+        });
+      }
+      return; // don't add GPS pings to the visual history timeline
+    }
+
+    const txt = \`\${ev.event_type || ''} \${ev.description || ''}\`.toLowerCase();
     let etapa: Etapa = 'Recebido';
     if (txt.includes('separa')) etapa = 'Em separação';
     else if (txt.includes('rota')) etapa = 'Em rota';
     else if (txt.includes('conclu') || txt.includes('entreg')) etapa = 'Entregue';
+    
     const arr = eventsByOrder.get(ev.order_id) || [];
-    arr.push({ etapa, horario: dt(ev.created_at) });
+    arr.push({ etapa, horario: dt(ev.created_at), description: ev.description });
     eventsByOrder.set(ev.order_id, arr);
   });
 
@@ -158,13 +143,14 @@ async function loadPedidos(): Promise<Pedido[]> {
       itens: grouped.get(o.id) || [],
       historico: eventsByOrder.get(o.id)?.length ? eventsByOrder.get(o.id)! : historicoBase,
       motorista: undefined,
+      location: locationsByOrder.get(o.id),
     };
   });
 }
 
 export default function PortalCliente() {
-  const [pedidos, setPedidos] = useState<Pedido[]>(pedidosMock);
-  const [selecionado, setSelecionado] = useState<Pedido>(pedidosMock[0]);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [selecionado, setSelecionado] = useState<Pedido | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -174,16 +160,22 @@ export default function PortalCliente() {
       const data = await loadPedidos();
       if (!mounted) return;
       setPedidos(data);
-      setSelecionado((prev) => data.find((p) => p.id === prev.id) || data[0]);
+      if (data.length > 0) {
+        setSelecionado((prev) => data.find((p) => p.id === prev?.id) || data[0]);
+      } else {
+        setSelecionado(null);
+      }
       setLoading(false);
     };
 
     refresh();
 
+    // Subscribe to events so location updates trigger a refresh
     const channel = supabase
       .channel('portal-cliente-orders')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, refresh)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_events' }, refresh) // specific listener for location events
       .subscribe();
 
     return () => {
@@ -203,112 +195,191 @@ export default function PortalCliente() {
   }, [pedidos]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-3xl font-black">Portal do Cliente</h1>
-        <span className="text-sm bg-brand-orange/15 text-brand-black font-bold px-3 py-1.5 rounded-full">
-          {loading ? 'Carregando...' : 'Rastreamento em tempo real'}
-        </span>
-      </div>
-
-      <div className="grid md:grid-cols-4 gap-4">
-        <Card title="Pedidos ativos" value={String(resumo.ativos)} icon={<PackageCheck className="w-5 h-5" />} />
-        <Card title="Em rota" value={String(resumo.emRota)} icon={<Truck className="w-5 h-5" />} />
-        <Card title="Aguardando" value={String(resumo.aguardando)} icon={<Clock3 className="w-5 h-5" />} />
-        <Card title="Saldo em aberto" value={fmt(resumo.saldo)} icon={<Wallet className="w-5 h-5" />} />
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b font-bold">Meus pedidos</div>
-          <div className="divide-y">
-            {pedidos.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setSelecionado(p)}
-                className={`w-full text-left px-5 py-4 transition hover:bg-gray-50 ${selecionado?.id === p.id ? 'bg-orange-50' : ''}`}
-              >
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <p className="font-black text-brand-black">{p.id}</p>
-                    <p className="text-xs text-gray-500 mt-1">Previsão: {p.previsao}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100">{p.status}</span>
-                    <span className="font-bold">{fmt(p.total)}</span>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                  </div>
-                </div>
-              </button>
-            ))}
+    <div className="min-h-screen bg-gray-50 pb-20">
+      
+      {/* Header com botão de voltar */}
+      <header className="bg-brand-black text-white px-4 py-4 shadow-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-black">Portal do Cliente</h1>
+              <p className="text-xs text-gray-400">Terra-Fort Materiais</p>
+            </div>
           </div>
+          <span className="text-xs bg-brand-orange/20 text-brand-orange font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+            <RadioReceiver className="w-3.5 h-3.5 animate-pulse" />
+            {loading ? 'Sincronizando...' : 'Live Tracking'}
+          </span>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+        <div className="grid md:grid-cols-4 gap-4">
+          <Card title="Pedidos ativos" value={String(resumo.ativos)} icon={<PackageCheck className="w-5 h-5" />} />
+          <Card title="Em rota de entrega" value={String(resumo.emRota)} icon={<Truck className="w-5 h-5" />} />
+          <Card title="Aguardando loja" value={String(resumo.aguardando)} icon={<Clock3 className="w-5 h-5" />} />
+          <Card title="Saldo em aberto" value={fmt(resumo.saldo)} icon={<Wallet className="w-5 h-5" />} />
         </div>
 
-        {selecionado && (
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5">
-            <div>
-              <p className="text-xs text-gray-500 uppercase font-bold">Pedido selecionado</p>
-              <h2 className="text-xl font-black mt-1">{selecionado.id}</h2>
-              <p className="text-sm text-gray-500">Previsão: {selecionado.previsao}</p>
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm h-[600px] flex flex-col">
+            <div className="px-5 py-4 border-b bg-gray-50/50">
+              <h3 className="font-black text-gray-900">Seus Pedidos</h3>
             </div>
-
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold text-gray-500 mb-2">
-                <span>Progresso da entrega</span>
-                <span>{Math.round(progresso(selecionado.status))}%</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-brand-orange transition-all" style={{ width: `${progresso(selecionado.status)}%` }} />
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                {etapas.map((e) => {
-                  const done = etapas.indexOf(e) <= etapas.indexOf(selecionado.status);
-                  return (
-                    <div key={e} className={`text-xs rounded-lg px-2 py-1.5 font-bold ${done ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {done ? '✓ ' : ''}{e}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-xs text-gray-500 uppercase font-bold">Entrega</p>
-              <p className="text-sm font-medium flex items-start gap-2"><MapPin className="w-4 h-4 mt-0.5 text-gray-500" />{selecionado.endereco}</p>
-              {selecionado.motorista && <p className="text-sm">Motorista: <strong>{selecionado.motorista}</strong></p>}
-              {selecionado.telefone && (
-                <a
-                  href={`tel:${selecionado.telefone.replace(/\D/g, '')}`}
-                  className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2"
+            <div className="flex-1 overflow-auto divide-y divide-gray-100">
+              {loading ? (
+                <div className="p-5 text-center text-sm font-bold text-gray-400">Procurando pedidos...</div>
+              ) : pedidos.length === 0 ? (
+                <div className="p-5 text-center text-sm font-bold text-gray-400">Nenhum pedido encontrado no seu e-mail.</div>
+              ) : pedidos.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelecionado(p)}
+                  className={\`w-full text-left p-4 transition-colors \${selecionado?.id === p.id ? 'bg-orange-50 border-l-4 border-brand-orange' : 'hover:bg-gray-50 border-l-4 border-transparent'}\`}
                 >
-                  <Phone className="w-4 h-4" /> Ligar para entrega
-                </a>
-              )}
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 uppercase font-bold mb-2">Itens do pedido</p>
-              <div className="space-y-1 text-sm">
-                {selecionado.itens.length > 0 ? selecionado.itens.map((i, idx) => (
-                  <p key={`${i.nome}-${idx}`}>• {i.nome} <strong>x{i.qtd}</strong></p>
-                )) : <p className="text-gray-500">Sem itens detalhados.</p>}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 uppercase font-bold mb-2">Histórico</p>
-              <div className="space-y-2">
-                {selecionado.historico.map((h, i) => (
-                  <div key={`${h.etapa}-${i}`} className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
-                    <span className="font-medium">{h.etapa}</span>
-                    <span className="text-gray-500">• {h.horario}</span>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="font-black text-gray-900 text-sm">{p.id}</p>
+                      <p className="text-xs text-gray-500 mt-1">Previsão: {p.previsao}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={\`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider \${p.status === 'Entregue' ? 'bg-green-100 text-green-700' : p.status === 'Em rota' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}\`}>
+                        {p.status}
+                      </span>
+                      <span className="font-bold text-sm text-gray-900">{fmt(p.total)}</span>
+                    </div>
                   </div>
-                ))}
-              </div>
+                </button>
+              ))}
             </div>
           </div>
-        )}
+
+          {selecionado && (
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                
+                {/* Rastreamento Live Hero */}
+                {selecionado.status === 'Em rota' ? (
+                  <div className="bg-brand-black text-white rounded-xl p-5 mb-6 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                      <RadioReceiver className="w-32 h-32" />
+                    </div>
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <span className="bg-green-500 text-white text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full animate-pulse inline-flex items-center gap-1 mb-2">
+                          <span className="w-1.5 h-1.5 bg-white rounded-full"></span> Ao vivo
+                        </span>
+                        <h2 className="text-2xl font-black">Seu pedido está a caminho!</h2>
+                        <p className="text-sm text-gray-400 mt-1">O entregador ativou o GPS. Acompanhe a entrega.</p>
+                      </div>
+                      
+                      {selecionado.location ? (
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-md border border-white/10 text-center">
+                          <Navigation className="w-6 h-6 mx-auto text-brand-orange mb-1" />
+                          <p className="text-xs font-bold uppercase tracking-wider">Localização Obtida</p>
+                          <p className="text-[10px] text-gray-400">Ultima att: {dt(selecionado.location.timestamp)}</p>
+                          <a href={\`https://www.google.com/maps/search/?api=1&query=\${selecionado.location.lat},\${selecionado.location.lng}\`} target="_blank" rel="noreferrer" className="text-brand-orange hover:text-orange-400 text-xs font-bold mt-2 inline-block underline">
+                            Ver no Google Maps
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-md border border-white/10 text-center">
+                          <Truck className="w-6 h-6 mx-auto text-gray-400 mb-1" />
+                          <p className="text-xs font-bold uppercase tracking-wider text-gray-300">Aguardando Sinal</p>
+                          <p className="text-[10px] text-gray-500">Conectando ao entregador...</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : selecionado.status === 'Entregue' ? (
+                  <div className="bg-green-50 text-green-800 rounded-xl p-5 mb-6 border border-green-100 flex items-center gap-4">
+                    <CheckCircle2 className="w-8 h-8 text-green-600 flex-shrink-0" />
+                    <div>
+                      <h2 className="text-xl font-black">Pedido Entregue!</h2>
+                      <p className="text-sm text-green-700">Obrigado por comprar com a Terra-Fort.</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="text-xl font-black text-gray-900">Pedido {selecionado.id}</h2>
+                    <p className="text-sm text-gray-500">Previsão: {selecionado.previsao}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-500 mb-2">
+                    <span>Progresso da entrega</span>
+                    <span>{Math.round(progresso(selecionado.status))}%</span>
+                  </div>
+                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-brand-orange transition-all duration-1000" style={{ width: \`\${progresso(selecionado.status)}%\` }} />
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+                    {etapas.map((e) => {
+                      const done = etapas.indexOf(e) <= etapas.indexOf(selecionado.status);
+                      const current = e === selecionado.status;
+                      return (
+                        <div key={e} className={\`text-xs rounded-xl px-2 py-2 font-bold text-center border transition-colors \${current ? 'bg-orange-50 border-orange-200 text-brand-orange' : done ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-400'}\`}>
+                          {e}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6 mt-8 border-t border-gray-100 pt-8">
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Endereço de Entrega</h3>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex gap-3">
+                      <MapPin className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <p className="text-sm font-medium text-gray-700">{selecionado.endereco}</p>
+                    </div>
+
+                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider mt-6">Itens do pedido</h3>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-2">
+                      {selecionado.itens.length > 0 ? selecionado.itens.map((i, idx) => (
+                        <div key={\`\${i.nome}-\${idx}\`} className="flex justify-between text-sm">
+                          <span className="text-gray-700">{i.nome}</span>
+                          <span className="font-bold text-gray-900">x{i.qtd}</span>
+                        </div>
+                      )) : <p className="text-sm text-gray-500">Sem itens detalhados.</p>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-4">Histórico de Rastreamento</h3>
+                    <div className="space-y-0">
+                      {selecionado.historico.map((h, i) => (
+                        <div key={\`\${h.etapa}-\${i}\`} className="relative pl-6 pb-6 last:pb-0">
+                          {/* Linha do tempo */}
+                          {i !== selecionado.historico.length - 1 && (
+                            <div className="absolute top-2 left-[9px] bottom-0 w-0.5 bg-gray-200" />
+                          )}
+                          <div className="absolute top-1 left-0 w-5 h-5 rounded-full bg-brand-orange border-4 border-white shadow-sm flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                          </div>
+                          
+                          <div>
+                            <p className="font-bold text-sm text-gray-900">{h.etapa}</p>
+                            <p className="text-xs text-gray-500">{h.horario}</p>
+                            {h.description && !h.description.includes('Coordenadas') && (
+                              <p className="text-xs text-gray-600 mt-1 bg-gray-50 p-2 rounded-lg border border-gray-100">{h.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -316,11 +387,11 @@ export default function PortalCliente() {
 
 function Card({ title, value, icon }: { title: string; value: string; icon: ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-      <div className="flex items-center justify-between text-gray-500 text-sm">
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+      <div className="flex items-center justify-between text-gray-500 text-sm font-bold uppercase tracking-wider mb-2 opacity-80">
         <span>{title}</span>{icon}
       </div>
-      <p className="text-2xl font-black mt-2">{value}</p>
+      <p className="text-3xl font-black text-gray-900">{value}</p>
     </div>
   );
 }

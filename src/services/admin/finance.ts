@@ -2,6 +2,73 @@ import type { AdminOrderRow } from '../../pages/admin/admin-types';
 
 export type FinanceRange = 'today' | '7d' | '30d' | 'month' | 'all';
 
+export type AdminFinanceTransactionRow = {
+  id: string;
+  type: 'INCOME' | 'EXPENSE';
+  category: string;
+  description: string;
+  amount: number;
+  date: string;
+  created_at: string;
+};
+
+export type AdminFinanceTransactionDraft = Omit<AdminFinanceTransactionRow, 'id' | 'created_at'>;
+
+async function getSupabase() {
+  const mod = await import('../../lib/supabase');
+  return mod.supabase;
+}
+
+export async function listFinanceTransactions(): Promise<AdminFinanceTransactionRow[]> {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('site_content').select('*').eq('section_key', 'finance.transactions').maybeSingle();
+  
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(error.message);
+  }
+
+  if (!data || !data.payload || !Array.isArray(data.payload.items)) {
+    return [];
+  }
+
+  return data.payload.items as AdminFinanceTransactionRow[];
+}
+
+export async function saveFinanceTransaction(draft: AdminFinanceTransactionDraft) {
+  const supabase = await getSupabase();
+  const transactions = await listFinanceTransactions();
+  
+  const newTx: AdminFinanceTransactionRow = {
+    ...draft,
+    id: crypto.randomUUID(),
+    created_at: new Date().toISOString()
+  };
+
+  transactions.unshift(newTx);
+
+  const { error } = await supabase.from('site_content').upsert({
+    section_key: 'finance.transactions',
+    payload: { items: transactions }
+  });
+
+  if (error) throw new Error(error.message);
+  return newTx;
+}
+
+export async function deleteFinanceTransaction(id: string) {
+  const supabase = await getSupabase();
+  let transactions = await listFinanceTransactions();
+  
+  transactions = transactions.filter(t => t.id !== id);
+
+  const { error } = await supabase.from('site_content').upsert({
+    section_key: 'finance.transactions',
+    payload: { items: transactions }
+  });
+
+  if (error) throw new Error(error.message);
+}
+
 function isSameUtcDay(a: Date, b: Date) {
   return a.getUTCFullYear() === b.getUTCFullYear()
     && a.getUTCMonth() === b.getUTCMonth()

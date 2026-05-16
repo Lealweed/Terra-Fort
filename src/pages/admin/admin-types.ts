@@ -34,6 +34,7 @@ export type AdminCustomerRow = {
   phone: string | null;
   document: string | null;
   notes: string | null;
+  is_blocked: boolean;
   created_at: string;
 };
 
@@ -45,6 +46,7 @@ export type AdminCustomerDraft = {
   phone: string;
   document: string;
   notes: string;
+  is_blocked: boolean;
 };
 
 export type AdminDriverStatus = 'available' | 'busy' | 'inactive';

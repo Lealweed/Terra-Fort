@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { Building2, Mail, Phone, PlusCircle, ReceiptText, Search, UserRound } from 'lucide-react';
+import { Building2, Mail, Phone, PlusCircle, ReceiptText, Search, UserRound, ShieldBan } from 'lucide-react';
 import type { AdminCustomerDraft, AdminCustomerRow, AdminOrderRow } from './admin-types';
 import { buildCustomerInsights, filterCustomers } from '../../services/admin/customers';
 
@@ -15,6 +15,7 @@ type Props = {
   onDraftChange: (updater: (draft: AdminCustomerDraft) => AdminCustomerDraft) => void;
   onSaveCustomer: () => Promise<void> | void;
   onCreateCustomer: () => void;
+  onDeleteCustomer: (customerId: string) => void;
   onOpenOrder: (orderId: string) => void;
 };
 
@@ -30,6 +31,7 @@ export default function AdminCustomersPage({
   onDraftChange,
   onSaveCustomer,
   onCreateCustomer,
+  onDeleteCustomer,
   onOpenOrder,
 }: Props) {
   const filtered = useMemo(() => filterCustomers(customers, search), [customers, search]);
@@ -74,10 +76,13 @@ export default function AdminCustomersPage({
               <button key={customer.id} onClick={() => onSelectCustomer(customer.id)} className={`w-full text-left p-4 transition-colors ${selectedCustomerId === customer.id ? 'bg-orange-50' : 'hover:bg-gray-50'}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-bold text-sm text-gray-900">{customer.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-sm text-gray-900">{customer.name}</p>
+                      {customer.is_blocked && <ShieldBan className="w-3.5 h-3.5 text-red-500" title="Cliente bloqueado" />}
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">{customer.contact_name || customer.email || '-'} • {customer.phone || '-'}</p>
                   </div>
-                  <CustomerBadge kind={customer.customer_kind} />
+                  <CustomerBadge kind={customer.customer_kind} isBlocked={customer.is_blocked} />
                 </div>
               </button>
             ))}
@@ -143,7 +148,24 @@ export default function AdminCustomersPage({
                   <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Anotações internas</label>
                   <textarea value={draftCustomer.notes} onChange={(e) => onDraftChange((draft) => ({ ...draft, notes: e.target.value }))} rows={4} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-orange" />
                 </div>
-                <button onClick={() => void onSaveCustomer()} className="bg-brand-black hover:bg-gray-800 transition-colors text-white px-5 py-3 rounded-xl text-sm font-bold">{isCreatingCustomer ? 'Criar cliente' : 'Salvar cliente'}</button>
+                <div className="flex items-center justify-between border-t border-gray-100 pt-5 mt-2">
+                  <div className="flex gap-3 items-center">
+                    <button onClick={() => void onSaveCustomer()} className="bg-brand-black hover:bg-gray-800 transition-colors text-white px-5 py-3 rounded-xl text-sm font-bold">
+                      {isCreatingCustomer ? 'Criar cliente' : 'Salvar alterações'}
+                    </button>
+                    {!isCreatingCustomer && (
+                      <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                        <input type="checkbox" checked={draftCustomer.is_blocked} onChange={(e) => onDraftChange((draft) => ({ ...draft, is_blocked: e.target.checked }))} className="w-4 h-4 text-brand-orange focus:ring-brand-orange border-gray-300 rounded" />
+                        Bloquear cliente
+                      </label>
+                    )}
+                  </div>
+                  {!isCreatingCustomer && selectedCustomer && (
+                    <button onClick={() => onDeleteCustomer(selectedCustomer.id)} className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+                      Excluir
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -214,7 +236,10 @@ function Input({ label, value, onChange, icon }: { label: string; value: string;
   );
 }
 
-function CustomerBadge({ kind }: { kind: 'person' | 'company' }) {
+function CustomerBadge({ kind, isBlocked }: { kind: 'person' | 'company', isBlocked?: boolean }) {
+  if (isBlocked) {
+    return <span className="rounded-full px-3 py-1 text-[11px] font-bold bg-red-100 text-red-700">Bloqueado</span>;
+  }
   const tones = kind === 'company' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700';
   return <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${tones}`}>{kind === 'company' ? 'Empresa' : 'Pessoa'}</span>;
 }

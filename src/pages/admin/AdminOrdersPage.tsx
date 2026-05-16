@@ -1,9 +1,12 @@
-import type { ReactNode } from 'react';
-import { AlertTriangle, MapPin, PackageCheck, Phone, Truck } from 'lucide-react';
-import type { AdminDriverRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow } from './admin-types';
-import { buildOrderDeliverySnapshot, buildOrdersOperationalSummary, filterOrders, summarizeOrderItems } from '../../services/admin/orders';
+import { useState, type ReactNode } from 'react';
+import { AlertTriangle, MapPin, PackageCheck, Phone, Truck, Plus, FileText } from 'lucide-react';
+import type { AdminDriverRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow, ProductRow } from './admin-types';
+import { buildOrderDeliverySnapshot, buildOrdersOperationalSummary, filterOrders, summarizeOrderItems, type AdminOrderDraft } from '../../services/admin/orders';
+import AdminOrderCreateModal from './AdminOrderCreateModal';
+import AdminOrderReceipt from './AdminOrderReceipt';
 
 type Props = {
+  products: ProductRow[];
   orders: AdminOrderRow[];
   drivers: AdminDriverRow[];
   selectedOrderId: string;
@@ -18,9 +21,11 @@ type Props = {
   onSelectOrder: (orderId: string) => void;
   onUpdateOrderStatus: (status: string) => Promise<void> | void;
   onOpenDeliveryTab: () => void;
+  onCreateOrder: (draft: AdminOrderDraft) => Promise<void>;
 };
 
 export default function AdminOrdersPage({
+  products,
   orders,
   drivers,
   selectedOrderId,
@@ -35,7 +40,10 @@ export default function AdminOrdersPage({
   onSelectOrder,
   onUpdateOrderStatus,
   onOpenDeliveryTab,
+  onCreateOrder,
 }: Props) {
+  const [isCreating, setIsCreating] = useState(false);
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const filteredOrders = filterOrders(orders, orderSearch, orderStatusFilter);
   const itemsSummary = summarizeOrderItems(orderItems);
   const summary = buildOrdersOperationalSummary(filteredOrders, drivers);
@@ -54,7 +62,12 @@ export default function AdminOrdersPage({
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
         <div className="px-5 py-3 border-b space-y-2">
-          <p className="font-bold">Pedidos</p>
+          <div className="flex justify-between items-center">
+            <p className="font-bold">Pedidos</p>
+            <button onClick={() => setIsCreating(true)} className="bg-brand-orange text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-600 transition-colors flex items-center gap-1">
+              <Plus className="w-4 h-4" /> Novo Pedido
+            </button>
+          </div>
           <div className="grid md:grid-cols-2 gap-2">
             <input value={orderSearch} onChange={(e) => onSearchChange(e.target.value)} placeholder="Buscar por código, cliente ou email" className="border border-gray-200 rounded px-3 py-2 text-sm" />
             <select value={orderStatusFilter} onChange={(e) => onStatusFilterChange(e.target.value)} className="border border-gray-200 rounded px-3 py-2 text-sm">
@@ -75,6 +88,11 @@ export default function AdminOrdersPage({
         <h3 className="font-black text-lg">Gestão do pedido</h3>
         {!selectedOrder ? <p className="text-sm text-gray-500">Selecione um pedido.</p> : (
           <>
+            <div className="flex justify-end mb-2">
+              <button onClick={() => setIsReceiptOpen(true)} className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-brand-orange transition-colors">
+                <FileText className="w-4 h-4" /> Ver Recibo
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <InfoTile label="Pedido" value={selectedOrder.order_code || selectedOrder.id.slice(0, 8).toUpperCase()} />
               <InfoTile label="Pagamento" value={selectedOrder.payment_status} highlight />
@@ -143,6 +161,22 @@ export default function AdminOrdersPage({
         )}
         </div>
       </div>
+      
+      {isCreating && (
+        <AdminOrderCreateModal
+          products={products}
+          onClose={() => setIsCreating(false)}
+          onSave={onCreateOrder}
+        />
+      )}
+
+      {isReceiptOpen && selectedOrder && (
+        <AdminOrderReceipt
+          order={selectedOrder}
+          orderItems={orderItems}
+          onClose={() => setIsReceiptOpen(false)}
+        />
+      )}
     </div>
   );
 }

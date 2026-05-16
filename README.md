@@ -1,55 +1,98 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Terra-Fort / terrafort.site
 
-# Run and deploy your AI Studio app
+Aplicação web da Terra-Fort com catálogo, carrinho, checkout Stripe, atendimento integrado com n8n/WhatsApp e operação administrativa via Supabase.
 
-This contains everything you need to run your app locally.
+## Stack principal
+- React 19
+- Vite 6
+- TypeScript
+- Express local para validação integrada
+- API serverless em `api/`
+- Supabase (dados + auth)
+- Stripe
+- n8n
 
-View your app in AI Studio: https://ai.studio/apps/305059f1-40d7-4f46-96d1-226dbd1005d1
+## Estrutura de runtime
+O projeto hoje trabalha com dois contextos:
 
-## Run Locally
+1. `npm run dev`
+   - sobe o servidor local via `tsx`
+   - monta as rotas `/api/*`
+   - injeta o frontend via middleware do Vite
 
-**Prerequisites:**  Node.js
+2. Produção/deploy
+   - frontend gerado com `npm run build`
+   - APIs em `api/` para deploy serverless
+   - `npm run start` serve o build localmente para validação pré-produção
 
+## Requisitos
+- Node.js 22+
+- npm
+- Projeto Supabase configurado
+- Conta/credenciais Stripe
+- Webhook n8n configurado
 
-1. Install dependencies:
+## Configuração local
+1. Instale dependências:
    `npm install`
-2. Create `.env.local` (or use the existing one) with:
-   - `GEMINI_API_KEY`
+2. Copie `.env.example` para `.env.local`
+3. Preencha pelo menos:
+   - `APP_URL`
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `STRIPE_SECRET_KEY`
-   - `STRIPE_WEBHOOK_SECRET`
-   - `VITE_STRIPE_PUBLIC_KEY`
+   - `N8N_SUPPORT_WEBHOOK_URL`
+   - `N8N_SUPPORT_WEBHOOK_TOKEN`
    - `N8N_SHARED_SECRET`
-3. Run the app:
+   - `VITE_SUPPORT_WHATSAPP_NUMBER`
+   - Para habilitar pagamento online também configure:
+     - `STRIPE_SECRET_KEY`
+     - `STRIPE_WEBHOOK_SECRET`
+     - `VITE_STRIPE_PUBLIC_KEY`
+   - Sem as chaves do Stripe, o carrinho continua operando com fallback para WhatsApp.
+4. Rode em desenvolvimento:
    `npm run dev`
 
-## Supabase bootstrap
+## Scripts
+- `npm run dev` — servidor local integrado (Express + Vite)
+- `npm run build` — build do frontend
+- `npm run start` — sobe validação local do build pronto
+- `npm run lint` — checagem TypeScript
+- `npm run test` — testes dos serviços administrativos
 
-- SQL migration: `supabase/migrations/20260506_init.sql`
-- Detailed notes: `supabase/README.md`
+## Banco / Supabase
+Aplique as migrations na ordem:
+1. `supabase/migrations/20260506_init.sql`
+2. `supabase/migrations/20260506153000_production_phase1.sql`
+3. `supabase/migrations/20260509120000_operations_integrations.sql`
+4. `supabase/migrations/20260510_customer_company_support.sql`
+5. `supabase/migrations/20260510_delivery_drivers.sql`
+6. `supabase/migrations/20260514_support_tickets.sql`
 
-## Agent context for n8n / WhatsApp
+Mais detalhes em:
+- `supabase/README.md`
+- `docs/deploy-runbook.md`
+- `docs/env-matrix.md`
+- `docs/production-checklist.md`
+- `docs/smoke-test.md`
 
-- Endpoint: `GET` or `POST` `/api/agent-context`
-- Authentication: `Authorization: Bearer <N8N_SHARED_SECRET>` or header `x-integration-key`
-- Accepted filters:
-  - `phone`
-  - `email`
-  - `orderCode`
-  - `productQuery`
-- Response includes:
-  - customer profile
-  - latest orders with timeline and items
-  - active promotions
-  - matching products
-  - integration status
+## Endpoints críticos
+- `POST /api/checkout`
+- `POST /api/create-payment-link`
+- `POST /api/stripe-webhook`
+- `GET|POST /api/agent-context`
+- `POST /api/support-intake`
+- `GET|POST|PATCH|DELETE /api/admin/users`
 
-## New operational tables
+## Fluxo mínimo antes de produção
+1. `npm run lint`
+2. `npm run test`
+3. `npm run build`
+4. `npm run start`
+5. Validar smoke test dos fluxos críticos
+6. Confirmar variáveis e secrets no ambiente de produção
+7. Validar webhooks Stripe/n8n
 
-- `promotions`
-- `integration_connections`
-- `sync_runs`
+## Observações
+- O projeto tem histórico de template AI Studio, mas o fluxo atual é Terra-Fort/Supabase/Stripe/n8n.
+- `GEMINI_API_KEY` foi mantida apenas como variável legada no exemplo; hoje não há uso funcional dela no app.

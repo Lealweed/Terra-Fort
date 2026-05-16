@@ -10,9 +10,10 @@ type Props = {
   productMovements: InventoryMovementRow[];
   onSelectProduct: (productId: string) => void;
   onSaveAdjustment: (movementType: InventoryAdjustmentType, quantity: number, reason: string) => Promise<boolean>;
+  onNewProduct: () => void;
 };
 
-export default function AdminInventoryPage({ products, selectedProductId, productMovements, onSelectProduct, onSaveAdjustment }: Props) {
+export default function AdminInventoryPage({ products, selectedProductId, productMovements, onSelectProduct, onSaveAdjustment, onNewProduct }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'critical' | 'out'>('all');
   const [adjType, setAdjType] = useState<InventoryAdjustmentType>('IN');
@@ -56,8 +57,13 @@ export default function AdminInventoryPage({ products, selectedProductId, produc
         <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm flex flex-col min-h-[680px]">
           <div className="p-5 border-b border-gray-100 space-y-3 bg-gray-50/60">
             <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-gray-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar produto, categoria, marca" className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-orange" />
+              <div className="relative flex-1 flex items-center">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar produto..." className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-brand-orange" />
+              </div>
+              <button onClick={onNewProduct} className="shrink-0 bg-brand-orange text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors shadow-sm">
+                + Novo
+              </button>
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs font-bold">
               <button onClick={() => setFilter('all')} className={`rounded-lg px-3 py-2 ${filter === 'all' ? 'bg-brand-orange text-white' : 'bg-white border border-gray-200 text-gray-600'}`}>Todos</button>

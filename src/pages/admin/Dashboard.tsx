@@ -3,11 +3,11 @@ import { AlertTriangle, FileText, MessageSquareMore, PackageCheck, Settings, Tru
 import { supabase } from '../../lib/supabase';
 import type { AdminCustomerDraft, AdminCustomerRow, AdminDriverDraft, AdminDriverRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow, AdminSupportTicketDraft, AdminSupportTicketRow, InventoryMovementRow, ProductDraft, ProductRow } from './admin-types';
 import { createProduct as createProductRecord, deleteProduct as deleteProductRecord, emptyProductDraft, listProducts, toProductDraft, updateProduct as updateProductRecord, uploadProductImage } from '../../services/admin/products';
-import { createCustomer as createCustomerRecord, listCustomers, toCustomerDraft, updateCustomer as updateCustomerRecord, validateCustomerDraft } from '../../services/admin/customers';
+import { createCustomer as createCustomerRecord, listCustomers, toCustomerDraft, updateCustomer as updateCustomerRecord, validateCustomerDraft, deleteCustomer as deleteCustomerRecord } from '../../services/admin/customers';
 import { createDriver as createDriverRecord, listDrivers, toDriverDraft, updateDriver as updateDriverRecord, validateDriverDraft } from '../../services/admin/drivers';
-import { listOrderEvents, listOrderItems, updateOrderStatusRecord } from '../../services/admin/orders';
+import { listOrderEvents, listOrderItems, updateOrderStatusRecord, createAdminOrderRecord, type AdminOrderDraft } from '../../services/admin/orders';
 import { saveDeliveryMetaRecord, updateDeliveryStatusRecord, resolveDriverName } from '../../services/admin/delivery';
-import { buildFinanceSummary } from '../../services/admin/finance';
+import { buildFinanceSummary, listFinanceTransactions, saveFinanceTransaction, deleteFinanceTransaction, type AdminFinanceTransactionRow, type AdminFinanceTransactionDraft } from '../../services/admin/finance';
 import { listInventoryMovements, saveInventoryAdjustment, type InventoryAdjustmentType } from '../../services/admin/inventory';
 import { listSupportTickets, toSupportTicketDraft, updateSupportTicket } from '../../services/admin/support';
 
@@ -71,6 +71,7 @@ export default function Dashboard() {
   const [supportTickets, setSupportTickets] = useState<AdminSupportTicketRow[]>([]);
   const [orderEvents, setOrderEvents] = useState<AdminOrderEventRow[]>([]);
   const [orderItems, setOrderItems] = useState<AdminOrderItemRow[]>([]);
+  const [financeTransactions, setFinanceTransactions] = useState<AdminFinanceTransactionRow[]>([]);
 
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -132,15 +133,45 @@ export default function Dashboard() {
     setSelectedOrderId((prev) => list.find((x) => x.id === prev)?.id || list[0]?.id || '');
   };
 
-  const loadCustomers = async () => {
-    const data = await listCustomers();
-    setCustomers(data);
-  };
-
   const loadDrivers = async () => {
     const data = await listDrivers();
     setDrivers(data);
     setSelectedDriverAdminId((prev) => data.find((x) => x.id === prev)?.id || data[0]?.id || '');
+  };
+
+  const loadTransactions = async () => {
+    try {
+      const data = await listFinanceTransactions();
+      setFinanceTransactions(data);
+    } catch (error) {
+      console.error('Erro ao carregar transações financeiras:', error);
+    }
+  };
+
+  const handleSaveTransaction = async (draft: AdminFinanceTransactionDraft) => {
+    try {
+      await saveFinanceTransaction(draft);
+      setMsg('Transação financeira adicionada!');
+      await loadTransactions();
+    } catch (error: any) {
+      setMsg(`Erro ao adicionar transação: ${error.message}`);
+    }
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (!confirm('Excluir esta transação?')) return;
+    try {
+      await deleteFinanceTransaction(id);
+      setMsg('Transação financeira excluída!');
+      await loadTransactions();
+    } catch (error: any) {
+      setMsg(`Erro ao excluir transação: ${error.message}`);
+    }
+  };
+
+  const loadCustomers = async () => {
+    const data = await listCustomers();
+    setCustomers(data);
   };
 
   const loadSupport = async () => {
@@ -202,7 +233,7 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    Promise.all([loadProducts(), loadOrders(), loadCustomers(), loadDrivers(), loadSupport(), loadUsers(), loadContent()]).finally(() => setLoading(false));
+    Promise.all([loadProducts(), loadOrders(), loadCustomers(), loadDrivers(), loadSupport(), loadUsers(), loadContent(), loadTransactions()]).finally(() => setLoading(false));
   }, []);
 
   const loadProductMovements = async (pid: string) => {
@@ -272,6 +303,18 @@ export default function Dashboard() {
     setSelectedCustomerId('');
     setIsCreatingCustomer(true);
     setDraftCustomer(toCustomerDraft());
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    if (!confirm('Deseja realmente deletar este cliente? Esta ação não pode ser desfeita e pode afetar pedidos associados.')) return;
+    try {
+      await deleteCustomerRecord(id);
+      setMsg('Cliente excluído com sucesso.');
+      setSelectedCustomerId('');
+      await loadCustomers();
+    } catch (error: any) {
+      setMsg(`Erro ao excluir cliente: ${error.message}`);
+    }
   };
 
   const saveStockAdjustment = async (movementType: InventoryAdjustmentType, quantity: number, reason: string) => {
@@ -373,6 +416,13 @@ export default function Dashboard() {
     } catch (error: any) {
       setMsg(`Erro: ${error.message}`);
     }
+  };
+
+  const handleCreateOrder = async (draft: AdminOrderDraft) => {
+    const orderId = await createAdminOrderRecord(draft);
+    setMsg('Pedido criado com sucesso!');
+    await loadOrders();
+    setSelectedOrderId(orderId);
   };
 
   const updateDeliveryStatus = async (status: DeliveryStatus) => {
@@ -710,11 +760,16 @@ export default function Dashboard() {
             productMovements={productMovements}
             onSelectProduct={setSelectedProductId}
             onSaveAdjustment={saveStockAdjustment}
+            onNewProduct={() => {
+              handleNewProduct();
+              setActiveTab('catalog');
+            }}
           />
         )}
 
         {activeTab === 'orders' && (
           <AdminOrdersPage
+            products={products}
             orders={orders}
             drivers={drivers}
             selectedOrderId={selectedOrderId}
@@ -729,6 +784,7 @@ export default function Dashboard() {
             onSelectOrder={setSelectedOrderId}
             onUpdateOrderStatus={updateOrderStatus}
             onOpenDeliveryTab={() => setActiveTab('delivery')}
+            onCreateOrder={handleCreateOrder}
           />
         )}
 
@@ -766,6 +822,7 @@ export default function Dashboard() {
             onDraftChange={(updater) => setDraftCustomer((current) => updater(current))}
             onSaveCustomer={saveCustomer}
             onCreateCustomer={handleNewCustomer}
+            onDeleteCustomer={handleDeleteCustomer}
             isCreatingCustomer={isCreatingCustomer}
             onOpenOrder={(orderId) => {
               setSelectedOrderId(orderId);
@@ -792,10 +849,13 @@ export default function Dashboard() {
         {activeTab === 'finance' && (
           <AdminFinancePage
             orders={orders}
+            transactions={financeTransactions}
             onOpenOrder={(orderId) => {
               setSelectedOrderId(orderId);
               setActiveTab('orders');
             }}
+            onSaveTransaction={handleSaveTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
           />
         )}
         </Suspense>

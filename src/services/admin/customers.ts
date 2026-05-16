@@ -24,6 +24,7 @@ export function toCustomerDraft(customer?: AdminCustomerRow | null): AdminCustom
     phone: customer?.phone || '',
     document: customer?.document || '',
     notes: customer?.notes || '',
+    is_blocked: customer?.is_blocked || false,
   };
 }
 
@@ -43,6 +44,7 @@ export function buildCreateCustomerPayload(draft: AdminCustomerDraft) {
     phone: draft.phone.trim() || null,
     document: draft.document.trim() || null,
     notes: draft.notes.trim() || null,
+    is_blocked: draft.is_blocked,
   };
 }
 
@@ -82,4 +84,10 @@ export async function createCustomer(draft: AdminCustomerDraft): Promise<AdminCu
   const { data, error } = await supabase.from('customers').insert(payload).select('*').single();
   if (error) throw new Error(error.message);
   return data as AdminCustomerRow;
+}
+
+export async function deleteCustomer(id: string) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('customers').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
