@@ -108,7 +108,7 @@ async function loadPedidos(): Promise<Pedido[]> {
       return; // don't add GPS pings to the visual history timeline
     }
 
-    const txt = \`\${ev.event_type || ''} \${ev.description || ''}\`.toLowerCase();
+    const txt = `${ev.event_type || ''} ${ev.description || ''}`.toLowerCase();
     let etapa: Etapa = 'Recebido';
     if (txt.includes('separa')) etapa = 'Em separação';
     else if (txt.includes('rota')) etapa = 'Em rota';
@@ -238,7 +238,7 @@ export default function PortalCliente() {
                 <button
                   key={p.id}
                   onClick={() => setSelecionado(p)}
-                  className={\`w-full text-left p-4 transition-colors \${selecionado?.id === p.id ? 'bg-orange-50 border-l-4 border-brand-orange' : 'hover:bg-gray-50 border-l-4 border-transparent'}\`}
+                  className={`w-full text-left p-4 transition-colors ${selecionado?.id === p.id ? 'bg-orange-50 border-l-4 border-brand-orange' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}
                 >
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
@@ -246,7 +246,7 @@ export default function PortalCliente() {
                       <p className="text-xs text-gray-500 mt-1">Previsão: {p.previsao}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <span className={\`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider \${p.status === 'Entregue' ? 'bg-green-100 text-green-700' : p.status === 'Em rota' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}\`}>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${p.status === 'Entregue' ? 'bg-green-100 text-green-700' : p.status === 'Em rota' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
                         {p.status}
                       </span>
                       <span className="font-bold text-sm text-gray-900">{fmt(p.total)}</span>
@@ -281,7 +281,7 @@ export default function PortalCliente() {
                           <Navigation className="w-6 h-6 mx-auto text-brand-orange mb-1" />
                           <p className="text-xs font-bold uppercase tracking-wider">Localização Obtida</p>
                           <p className="text-[10px] text-gray-400">Ultima att: {dt(selecionado.location.timestamp)}</p>
-                          <a href={\`https://www.google.com/maps/search/?api=1&query=\${selecionado.location.lat},\${selecionado.location.lng}\`} target="_blank" rel="noreferrer" className="text-brand-orange hover:text-orange-400 text-xs font-bold mt-2 inline-block underline">
+                          <a href={`https://www.google.com/maps/search/?api=1&query=${selecionado.location.lat},${selecionado.location.lng}`} target="_blank" rel="noreferrer" className="text-brand-orange hover:text-orange-400 text-xs font-bold mt-2 inline-block underline">
                             Ver no Google Maps
                           </a>
                         </div>
@@ -317,14 +317,14 @@ export default function PortalCliente() {
                     <span>{Math.round(progresso(selecionado.status))}%</span>
                   </div>
                   <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-brand-orange transition-all duration-1000" style={{ width: \`\${progresso(selecionado.status)}%\` }} />
+                    <div className="h-full bg-brand-orange transition-all duration-1000" style={{ width: `${progresso(selecionado.status)}%` }} />
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
                     {etapas.map((e) => {
                       const done = etapas.indexOf(e) <= etapas.indexOf(selecionado.status);
                       const current = e === selecionado.status;
                       return (
-                        <div key={e} className={\`text-xs rounded-xl px-2 py-2 font-bold text-center border transition-colors \${current ? 'bg-orange-50 border-orange-200 text-brand-orange' : done ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-400'}\`}>
+                        <div key={e} className={`text-xs rounded-xl px-2 py-2 font-bold text-center border transition-colors ${current ? 'bg-orange-50 border-orange-200 text-brand-orange' : done ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
                           {e}
                         </div>
                       );
@@ -343,7 +343,7 @@ export default function PortalCliente() {
                     <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider mt-6">Itens do pedido</h3>
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-2">
                       {selecionado.itens.length > 0 ? selecionado.itens.map((i, idx) => (
-                        <div key={\`\${i.nome}-\${idx}\`} className="flex justify-between text-sm">
+                        <div key={`${i.nome}-${idx}`} className="flex justify-between text-sm">
                           <span className="text-gray-700">{i.nome}</span>
                           <span className="font-bold text-gray-900">x{i.qtd}</span>
                         </div>
@@ -355,7 +355,7 @@ export default function PortalCliente() {
                     <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-4">Histórico de Rastreamento</h3>
                     <div className="space-y-0">
                       {selecionado.historico.map((h, i) => (
-                        <div key={\`\${h.etapa}-\${i}\`} className="relative pl-6 pb-6 last:pb-0">
+                        <div key={`${h.etapa}-${i}`} className="relative pl-6 pb-6 last:pb-0">
                           {/* Linha do tempo */}
                           {i !== selecionado.historico.length - 1 && (
                             <div className="absolute top-2 left-[9px] bottom-0 w-0.5 bg-gray-200" />

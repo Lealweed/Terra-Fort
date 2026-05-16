@@ -126,7 +126,7 @@ export default function AdminFinancePage({ orders, transactions, onOpenOrder, on
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} tickFormatter={(val) => \`R$ \${val}\`} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} tickFormatter={(val) => `R$ ${val}`} />
                 <RechartsTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
                 <Bar dataKey="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={40} />
@@ -160,7 +160,7 @@ export default function AdminFinancePage({ orders, transactions, onOpenOrder, on
                 {transactions.map(t => (
                   <div key={t.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors rounded-lg group">
                     <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-lg \${t.type === 'INCOME' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                      <div className={`p-2 rounded-lg ${t.type === 'INCOME' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                         {t.type === 'INCOME' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                       </div>
                       <div>
@@ -169,7 +169,7 @@ export default function AdminFinancePage({ orders, transactions, onOpenOrder, on
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className={`font-black \${t.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}`}>
+                      <span className={`font-black ${t.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}`}>
                         {t.type === 'INCOME' ? '+' : '-'}{money(t.amount)}
                       </span>
                       <button onClick={() => onDeleteTransaction(t.id)} className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity p-2">
@@ -234,10 +234,10 @@ export default function AdminFinancePage({ orders, transactions, onOpenOrder, on
             </div>
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => setDraftTx({...draftTx, type: 'INCOME'})} className={`py-3 rounded-xl font-bold text-sm border transition-colors \${draftTx.type === 'INCOME' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-gray-200 text-gray-500'}`}>
+                <button onClick={() => setDraftTx({...draftTx, type: 'INCOME'})} className={`py-3 rounded-xl font-bold text-sm border transition-colors ${draftTx.type === 'INCOME' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-gray-200 text-gray-500'}`}>
                   Receita
                 </button>
-                <button onClick={() => setDraftTx({...draftTx, type: 'EXPENSE'})} className={`py-3 rounded-xl font-bold text-sm border transition-colors \${draftTx.type === 'EXPENSE' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-gray-200 text-gray-500'}`}>
+                <button onClick={() => setDraftTx({...draftTx, type: 'EXPENSE'})} className={`py-3 rounded-xl font-bold text-sm border transition-colors ${draftTx.type === 'EXPENSE' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-gray-200 text-gray-500'}`}>
                   Despesa
                 </button>
               </div>
@@ -291,7 +291,7 @@ function MetricCard({ title, value, helper, icon, tone }: { title: string; value
   } as const;
 
   return (
-    <div className={`rounded-2xl border p-5 \${tones[tone]} relative overflow-hidden`}>
+    <div className={`rounded-2xl border p-5 ${tones[tone]} relative overflow-hidden`}>
       <div className="flex justify-between items-start mb-4">
         <p className="text-xs font-black uppercase tracking-wider opacity-80">{title}</p>
         <div className="opacity-80">{icon}</div>

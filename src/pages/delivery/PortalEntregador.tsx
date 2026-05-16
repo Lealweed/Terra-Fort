@@ -107,7 +107,7 @@ export default function PortalEntregador() {
              await supabase.from('order_events').insert({
                order_id: selectedId,
                event_type: 'location_update',
-               description: \`Coordenadas atualizadas: \${pos.coords.latitude}, \${pos.coords.longitude}\`,
+               description: `Coordenadas atualizadas: ${pos.coords.latitude}, ${pos.coords.longitude}`,
                actor_role: 'delivery'
              });
           }
@@ -135,7 +135,7 @@ export default function PortalEntregador() {
       status: 'Pendente',
       total: 0,
       delivery_address: { rua: 'Preencher endereço' },
-      order_code: \`TF-\${Math.floor(1000 + Math.random() * 9000)}\`,
+      order_code: `TF-${Math.floor(1000 + Math.random() * 9000)}`,
     };
 
     const { error } = await supabase.from('orders').insert(payload);
@@ -163,7 +163,7 @@ export default function PortalEntregador() {
       await supabase.from('order_events').insert({
         order_id: selected.id,
         event_type: 'delivery_status_changed',
-        description: \`Entregador atualizou status para \${selected.status}\`,
+        description: `Entregador atualizou status para ${selected.status}`,
         actor_role: 'delivery',
       });
     }
@@ -178,7 +178,7 @@ export default function PortalEntregador() {
     await supabase.from('order_events').insert({
       order_id: selected.id,
       event_type: 'driver_message',
-      description: \`Mensagem do entregador: \${adminMessage}\`,
+      description: `Mensagem do entregador: ${adminMessage}`,
       actor_role: 'delivery'
     });
     setAdminMessage('');
@@ -188,7 +188,7 @@ export default function PortalEntregador() {
 
   const removeEntrega = async () => {
     if (!selected) return;
-    if (!confirm(\`Remover entrega \${selected.orderCode}?\`)) return;
+    if (!confirm(`Remover entrega ${selected.orderCode}?`)) return;
 
     setSaving(true);
     const { error } = await supabase.from('orders').delete().eq('id', selected.id);
@@ -217,9 +217,9 @@ export default function PortalEntregador() {
           </div>
           <button
             onClick={() => setIsTracking(!isTracking)}
-            className={\`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors \${isTracking ? 'bg-green-500 text-white shadow-lg shadow-green-500/30' : 'bg-gray-800 text-gray-300'}\`}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${isTracking ? 'bg-green-500 text-white shadow-lg shadow-green-500/30' : 'bg-gray-800 text-gray-300'}`}
           >
-            <RadioReceiver className={\`w-4 h-4 \${isTracking ? 'animate-pulse' : ''}\`} />
+            <RadioReceiver className={`w-4 h-4 ${isTracking ? 'animate-pulse' : ''}`} />
             {isTracking ? 'GPS Ativo' : 'Ligar GPS'}
           </button>
         </div>
@@ -266,11 +266,11 @@ export default function PortalEntregador() {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {items.map((r) => (
-                    <button key={r.id} onClick={() => setSelectedId(r.id)} className={\`w-full text-left p-4 transition-colors \${selectedId === r.id ? 'bg-orange-50 border-l-4 border-brand-orange' : 'hover:bg-gray-50 border-l-4 border-transparent'}\`}>
+                    <button key={r.id} onClick={() => setSelectedId(r.id)} className={`w-full text-left p-4 transition-colors ${selectedId === r.id ? 'bg-orange-50 border-l-4 border-brand-orange' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}>
                       <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-start">
                           <p className="font-black text-gray-900 text-sm">{r.orderCode}</p>
-                          <span className={\`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider \${r.status === 'Concluído' ? 'bg-green-100 text-green-700' : r.status === 'Em rota' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}\`}>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${r.status === 'Concluído' ? 'bg-green-100 text-green-700' : r.status === 'Em rota' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                             {r.status}
                           </span>
                         </div>
@@ -325,13 +325,13 @@ export default function PortalEntregador() {
                     </button>
                     
                     {selected.customerPhone && (
-                      <a href={\`https://wa.me/55\${selected.customerPhone.replace(/\\D/g, '')}?text=Olá! Sou o entregador da Terra-Fort.\`} target="_blank" rel="noreferrer" className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors flex-1 min-w-[140px]">
+                      <a href={`https://wa.me/55${selected.customerPhone.replace(/\\D/g, '')}?text=Olá! Sou o entregador da Terra-Fort.`} target="_blank" rel="noreferrer" className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors flex-1 min-w-[140px]">
                         <MessageCircle className="w-4 h-4" /> WhatsApp Cliente
                       </a>
                     )}
                     
                     {selected.status === 'Em rota' && (
-                      <a href={\`https://www.google.com/maps/search/?api=1&query=\${encodeURIComponent(selected.address)}\`} target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors flex-1 min-w-[140px]">
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selected.address)}`} target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors flex-1 min-w-[140px]">
                         <Truck className="w-4 h-4" /> Navegar (GPS)
                       </a>
                     )}
@@ -376,7 +376,7 @@ function Stat({ title, value, icon, tone = 'blue' }: { title: string; value: str
   };
   
   return (
-    <div className={\`rounded-2xl border p-5 \${tones[tone]} shadow-sm\`}>
+    <div className={`rounded-2xl border p-5 ${tones[tone]} shadow-sm`}>
       <div className="flex items-center justify-between opacity-80 text-sm font-bold uppercase tracking-wider mb-2">
         <span>{title}</span>
         {icon}
@@ -394,7 +394,7 @@ function Field({ label, value, onChange, readOnly }: { label: string; value: str
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         readOnly={readOnly}
-        className={\`w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors \${readOnly ? 'bg-gray-50 border-gray-100 text-gray-600' : 'border-gray-200 focus:border-brand-orange bg-white'}\`}
+        className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${readOnly ? 'bg-gray-50 border-gray-100 text-gray-600' : 'border-gray-200 focus:border-brand-orange bg-white'}`}
       />
     </div>
   );
