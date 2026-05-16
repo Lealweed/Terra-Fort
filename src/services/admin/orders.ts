@@ -123,7 +123,10 @@ export async function createAdminOrderRecord(draft: AdminOrderDraft) {
   
   const total = draft.items.reduce((acc, item) => acc + (item.unit_price * item.quantity), 0);
 
+  const code = `TF-${Math.floor(1000 + Math.random() * 9000)}`;
+
   const { data: order, error: orderError } = await supabase.from('orders').insert({
+    order_code: code,
     customer_name: draft.customer_name,
     customer_phone: draft.customer_phone,
     customer_email: draft.customer_email,
@@ -133,6 +136,7 @@ export async function createAdminOrderRecord(draft: AdminOrderDraft) {
     subtotal: total,
     freight: 0,
     discount: 0,
+    delivery_address: { rua: 'Preencher endereço' },
     notes: 'Criado manualmente pelo Dashboard'
   }).select('id').single();
 
