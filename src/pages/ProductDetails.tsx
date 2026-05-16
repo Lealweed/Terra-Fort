@@ -6,6 +6,8 @@ import { getProductById } from '../lib/products';
 import { useCart } from '../contexts/CartContext';
 import SafeImage from '../components/SafeImage';
 import { Product } from '../types';
+import { submitSupportRequest } from '../lib/customerSupport';
+import { buildProductSupportRequest } from '../lib/productSupport';
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -13,6 +15,7 @@ export default function ProductDetails() {
   const { addToCart } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [supportLoading, setSupportLoading] = useState(false);
 
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -65,15 +68,23 @@ export default function ProductDetails() {
     }).format(price);
   };
 
-  const whatsappNumber = "5594999346107";
-  const message = encodeURIComponent(`Olá, visualizando o produto *${product.name}* no site.\nGostaria de mais informações/orçamento.`);
-  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
-
   const isLowStock = product.stock_level && product.stock_level <= 10 && product.stock_level > 0;
   const isOutOfStock = product.stock_level === 0;
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
+  };
+
+  const handleTalkToSupport = async () => {
+    setSupportLoading(true);
+
+    try {
+      const result = await submitSupportRequest(buildProductSupportRequest(product, 'product_details', quantity));
+
+      window.open(result.whatsappUrl, '_blank');
+    } finally {
+      setSupportLoading(false);
+    }
   };
 
   return (
@@ -244,11 +255,12 @@ export default function ProductDetails() {
                     
                     {product.sob_consulta ? (
                       <button 
-                        onClick={handleAddToCart}
-                        className="w-full md:w-auto bg-[#25D366] hover:bg-[#20b858] hover:-translate-y-0.5 text-white flex items-center justify-center gap-3 py-4 px-6 md:px-8 rounded-lg font-bold text-base md:text-lg transition-all hover:shadow-md hover:shadow-[#25D366]/20 active:scale-95 whitespace-nowrap h-[56px]"
+                        onClick={handleTalkToSupport}
+                        disabled={supportLoading}
+                        className="w-full md:w-auto bg-[#25D366] hover:bg-[#20b858] hover:-translate-y-0.5 text-white disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-3 py-4 px-6 md:px-8 rounded-lg font-bold text-base md:text-lg transition-all hover:shadow-md hover:shadow-[#25D366]/20 active:scale-95 whitespace-nowrap h-[56px]"
                       >
                         <MessageCircle className="w-5 h-5 md:w-6 md:h-6 flex-shrink-0" />
-                        <span>Adicionar ao Orçamento</span>
+                        <span>{supportLoading ? 'Chamando atendimento...' : 'Adicionar ao Orçamento'}</span>
                       </button>
                     ) : (
                       <button 
@@ -265,6 +277,15 @@ export default function ProductDetails() {
                       </button>
                     )}
                 </div>
+
+                <button
+                  onClick={handleTalkToSupport}
+                  disabled={supportLoading}
+                  className="mt-4 w-full md:w-auto border border-[#25D366] text-[#25D366] hover:bg-[#25D366] hover:text-white disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-3 py-3 px-6 rounded-lg font-bold text-sm md:text-base transition-all active:scale-95"
+                >
+                  <MessageCircle className="w-5 h-5 flex-shrink-0" />
+                  <span>{supportLoading ? 'Chamando atendimento...' : 'Tirar dúvida no atendimento'}</span>
+                </button>
               </div>
 
               {/* Confidence Hooks */}

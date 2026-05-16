@@ -1,17 +1,19 @@
 import { lazy, Suspense, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, FileText, PackageCheck, Settings, Truck, Users, Wrench, LayoutDashboard, ShoppingBag, PenTool, ChevronLeft, ChevronRight, Boxes, CircleDollarSign } from 'lucide-react';
+import { AlertTriangle, FileText, MessageSquareMore, PackageCheck, Settings, Truck, Users, Wrench, LayoutDashboard, ShoppingBag, PenTool, ChevronLeft, ChevronRight, Boxes, CircleDollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { AdminCustomerDraft, AdminCustomerRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow, InventoryMovementRow, ProductDraft, ProductRow } from './admin-types';
+import type { AdminCustomerDraft, AdminCustomerRow, AdminDriverDraft, AdminDriverRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow, AdminSupportTicketDraft, AdminSupportTicketRow, InventoryMovementRow, ProductDraft, ProductRow } from './admin-types';
 import { createProduct as createProductRecord, deleteProduct as deleteProductRecord, emptyProductDraft, listProducts, toProductDraft, updateProduct as updateProductRecord, uploadProductImage } from '../../services/admin/products';
 import { createCustomer as createCustomerRecord, listCustomers, toCustomerDraft, updateCustomer as updateCustomerRecord, validateCustomerDraft } from '../../services/admin/customers';
+import { createDriver as createDriverRecord, listDrivers, toDriverDraft, updateDriver as updateDriverRecord, validateDriverDraft } from '../../services/admin/drivers';
 import { listOrderEvents, listOrderItems, updateOrderStatusRecord } from '../../services/admin/orders';
-import { saveDeliveryMetaRecord, updateDeliveryStatusRecord } from '../../services/admin/delivery';
+import { saveDeliveryMetaRecord, updateDeliveryStatusRecord, resolveDriverName } from '../../services/admin/delivery';
 import { buildFinanceSummary } from '../../services/admin/finance';
 import { listInventoryMovements, saveInventoryAdjustment, type InventoryAdjustmentType } from '../../services/admin/inventory';
+import { listSupportTickets, toSupportTicketDraft, updateSupportTicket } from '../../services/admin/support';
 
-type Tab = 'overview' | 'control' | 'catalog' | 'inventory' | 'orders' | 'delivery' | 'customers' | 'finance' | 'content' | 'users';
+type Tab = 'overview' | 'control' | 'catalog' | 'inventory' | 'orders' | 'delivery' | 'customers' | 'support' | 'finance' | 'content' | 'users';
 type OrderStatus = 'Pendente' | 'Pago' | 'Em rota de entrega' | 'Cancelado' | 'Concluído';
-type DeliveryStatus = 'Pendente' | 'Em separação' | 'Em rota' | 'Concluído' | 'Cancelado';
+type DeliveryStatus = OrderStatus;
 type Role = 'admin' | 'delivery' | 'customer';
 
 
@@ -26,6 +28,7 @@ type AdminUser = {
 };
 
 type CustomerRow = AdminCustomerRow;
+type DriverRow = AdminDriverRow;
 
 type ContentState = {
   heroTitle: string;
@@ -46,7 +49,7 @@ type ContentState = {
 };
 
 const orderStatuses: OrderStatus[] = ['Pendente', 'Pago', 'Em rota de entrega', 'Cancelado', 'Concluído'];
-const deliveryStatuses: DeliveryStatus[] = ['Pendente', 'Em separação', 'Em rota', 'Concluído', 'Cancelado'];
+const deliveryStatuses: DeliveryStatus[] = [...orderStatuses];
 
 const AdminCatalogPage = lazy(() => import('./AdminCatalogPage'));
 const AdminControlPage = lazy(() => import('./AdminControlPage'));
@@ -55,6 +58,7 @@ const AdminDeliveryPage = lazy(() => import('./AdminDeliveryPage'));
 const AdminFinancePage = lazy(() => import('./AdminFinancePage'));
 const AdminInventoryPage = lazy(() => import('./AdminInventoryPage'));
 const AdminOrdersPage = lazy(() => import('./AdminOrdersPage'));
+const AdminSupportPage = lazy(() => import('./AdminSupportPage'));
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -63,15 +67,21 @@ export default function Dashboard() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [drivers, setDrivers] = useState<DriverRow[]>([]);
+  const [supportTickets, setSupportTickets] = useState<AdminSupportTicketRow[]>([]);
   const [orderEvents, setOrderEvents] = useState<AdminOrderEventRow[]>([]);
   const [orderItems, setOrderItems] = useState<AdminOrderItemRow[]>([]);
 
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedSupportTicketId, setSelectedSupportTicketId] = useState('');
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const [draftProduct, setDraftProduct] = useState<ProductDraft>(emptyProductDraft);
   const [draftCustomer, setDraftCustomer] = useState<AdminCustomerDraft>(toCustomerDraft());
+  const [draftDriver, setDraftDriver] = useState<AdminDriverDraft>(toDriverDraft());
+  const [draftSupportTicket, setDraftSupportTicket] = useState<AdminSupportTicketDraft>(toSupportTicketDraft());
+  const [selectedDriverAdminId, setSelectedDriverAdminId] = useState('');
   const [productMovements, setProductMovements] = useState<InventoryMovementRow[]>([]);
 
   const [newUserEmail, setNewUserEmail] = useState('');
@@ -81,6 +91,8 @@ export default function Dashboard() {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('todos');
   const [customerSearch, setCustomerSearch] = useState('');
+  const [supportSearch, setSupportSearch] = useState('');
+  const [supportStatusFilter, setSupportStatusFilter] = useState<string>('todos');
 
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(true);
@@ -101,6 +113,7 @@ export default function Dashboard() {
   const money = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
   const selectedProduct = useMemo(() => products.find((p) => p.id === selectedProductId), [products, selectedProductId]);
   const selectedOrder = useMemo(() => orders.find((o) => o.id === selectedOrderId), [orders, selectedOrderId]);
+  const selectedSupportTicket = useMemo(() => supportTickets.find((ticket) => ticket.id === selectedSupportTicketId) || null, [supportTickets, selectedSupportTicketId]);
 
   const loadProducts = async () => {
     const list = await listProducts();
@@ -111,7 +124,7 @@ export default function Dashboard() {
   const loadOrders = async () => {
     const { data } = await supabase
       .from('orders')
-      .select('id,order_code,customer_name,customer_phone,customer_email,status,total,payment_status,created_at,delivery_address')
+      .select('id,order_code,customer_name,customer_phone,customer_email,status,total,payment_status,created_at,assigned_driver_id,delivery_address')
       .order('created_at', { ascending: false })
       .limit(300);
     const list = (data || []) as OrderRow[];
@@ -124,7 +137,20 @@ export default function Dashboard() {
     setCustomers(data);
   };
 
+  const loadDrivers = async () => {
+    const data = await listDrivers();
+    setDrivers(data);
+    setSelectedDriverAdminId((prev) => data.find((x) => x.id === prev)?.id || data[0]?.id || '');
+  };
+
+  const loadSupport = async () => {
+    const data = await listSupportTickets();
+    setSupportTickets(data);
+    setSelectedSupportTicketId((prev) => data.find((x) => x.id === prev)?.id || data[0]?.id || '');
+  };
+
   const selectedCustomer = useMemo(() => customers.find(c => c.id === selectedCustomerId), [customers, selectedCustomerId]);
+  const selectedDriverAdmin = useMemo(() => drivers.find((driver) => driver.id === selectedDriverAdminId), [drivers, selectedDriverAdminId]);
 
   const authHeaders = async () => {
     const { data } = await supabase.auth.getSession();
@@ -176,7 +202,7 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    Promise.all([loadProducts(), loadOrders(), loadCustomers(), loadUsers(), loadContent()]).finally(() => setLoading(false));
+    Promise.all([loadProducts(), loadOrders(), loadCustomers(), loadDrivers(), loadSupport(), loadUsers(), loadContent()]).finally(() => setLoading(false));
   }, []);
 
   const loadProductMovements = async (pid: string) => {
@@ -207,6 +233,18 @@ export default function Dashboard() {
       setDraftCustomer(toCustomerDraft());
     }
   }, [isCreatingCustomer, selectedCustomerId, selectedCustomer]);
+
+  useEffect(() => {
+    if (selectedDriverAdmin) {
+      setDraftDriver(toDriverDraft(selectedDriverAdmin));
+    } else {
+      setDraftDriver(toDriverDraft());
+    }
+  }, [selectedDriverAdminId, selectedDriverAdmin]);
+
+  useEffect(() => {
+    setDraftSupportTicket(toSupportTicketDraft(selectedSupportTicket));
+  }, [selectedSupportTicket]);
 
   const saveCustomer = async () => {
     setMsg('');
@@ -349,15 +387,50 @@ export default function Dashboard() {
     }
   };
 
-  const saveDeliveryMeta = async (driverName: string, note: string) => {
+  const saveDeliveryMeta = async (driverId: string, note: string) => {
     if (!selectedOrder) return;
     try {
-      await saveDeliveryMetaRecord(selectedOrder.id, selectedOrder.delivery_address, driverName, note);
+      const legacyDriverName = typeof selectedOrder.delivery_address?.driver_name === 'string' ? selectedOrder.delivery_address.driver_name : '';
+      const driverName = resolveDriverName(driverId, drivers, legacyDriverName);
+      await saveDeliveryMetaRecord(selectedOrder.id, selectedOrder.delivery_address, driverId, driverName, note);
       setMsg('Dados de entrega salvos.');
       await loadOrders();
       await loadOrderEvents(selectedOrder.id);
     } catch (error: any) {
       setMsg(`Erro: ${error.message}`);
+    }
+  };
+
+  const saveDriver = async () => {
+    setMsg('');
+    const validationError = validateDriverDraft(draftDriver);
+    if (validationError) return setMsg(validationError);
+
+    try {
+      if (selectedDriverAdminId) {
+        await updateDriverRecord(selectedDriverAdminId, draftDriver);
+        setMsg('Entregador atualizado com sucesso.');
+      } else {
+        const created = await createDriverRecord(draftDriver);
+        setSelectedDriverAdminId(created.id);
+        setMsg('Entregador cadastrado com sucesso.');
+      }
+      await loadDrivers();
+    } catch (error: any) {
+      setMsg(`Erro ao salvar entregador: ${error.message}`);
+    }
+  };
+
+  const saveSupport = async () => {
+    if (!selectedSupportTicketId) return setMsg('Selecione um ticket para salvar.');
+    setMsg('');
+
+    try {
+      await updateSupportTicket(selectedSupportTicketId, draftSupportTicket);
+      setMsg('Atendimento atualizado com sucesso.');
+      await loadSupport();
+    } catch (error: any) {
+      setMsg(`Erro ao salvar atendimento: ${error.message}`);
     }
   };
 
@@ -464,6 +537,7 @@ export default function Dashboard() {
     { id: 'orders', label: 'Pedidos', icon: <PackageCheck className="w-5 h-5" /> },
     { id: 'delivery', label: 'Logística', icon: <Truck className="w-5 h-5" /> },
     { id: 'customers', label: 'Clientes', icon: <Users className="w-5 h-5" /> },
+    { id: 'support', label: 'Atendimento', icon: <MessageSquareMore className="w-5 h-5" /> },
     { id: 'finance', label: 'Financeiro', icon: <FileText className="w-5 h-5" /> },
     { id: 'content', label: 'Conteúdo', icon: <PenTool className="w-5 h-5" /> },
     { id: 'users', label: 'Usuários', icon: <Settings className="w-5 h-5" /> },
@@ -642,6 +716,7 @@ export default function Dashboard() {
         {activeTab === 'orders' && (
           <AdminOrdersPage
             orders={orders}
+            drivers={drivers}
             selectedOrderId={selectedOrderId}
             orderSearch={orderSearch}
             orderStatusFilter={orderStatusFilter}
@@ -660,9 +735,19 @@ export default function Dashboard() {
         {activeTab === 'delivery' && (
           <AdminDeliveryPage
             order={selectedOrder}
+            drivers={drivers}
+            draftDriver={draftDriver}
+            selectedDriverAdminId={selectedDriverAdminId}
             deliveryStatuses={deliveryStatuses}
             onStatusChange={updateDeliveryStatus}
             onSaveMeta={saveDeliveryMeta}
+            onDriverDraftChange={(updater) => setDraftDriver((current) => updater(current))}
+            onSelectDriverAdmin={setSelectedDriverAdminId}
+            onSaveDriver={saveDriver}
+            onNewDriver={() => {
+              setSelectedDriverAdminId('');
+              setDraftDriver(toDriverDraft());
+            }}
           />
         )}
 
@@ -686,6 +771,21 @@ export default function Dashboard() {
               setSelectedOrderId(orderId);
               setActiveTab('orders');
             }}
+          />
+        )}
+
+        {activeTab === 'support' && (
+          <AdminSupportPage
+            tickets={supportTickets}
+            selectedTicketId={selectedSupportTicketId}
+            search={supportSearch}
+            statusFilter={supportStatusFilter}
+            draftTicket={draftSupportTicket}
+            onSearchChange={setSupportSearch}
+            onStatusFilterChange={setSupportStatusFilter}
+            onSelectTicket={setSelectedSupportTicketId}
+            onDraftChange={(updater) => setDraftSupportTicket((current) => updater(current))}
+            onSaveTicket={saveSupport}
           />
         )}
 

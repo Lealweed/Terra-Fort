@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Product } from '../types';
+import { getCartQuantityTotal } from '../lib/cartCheckout';
 
 interface CartItem extends Product {
   cartQuantity: number;
@@ -67,10 +68,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const quantity = isNaN(item.cartQuantity) || item.cartQuantity == null ? 0 : Number(item.cartQuantity);
     return acc + (price * quantity);
   }, 0);
-  const cartCount = cartItems.reduce((acc, item) => {
-    const quantity = isNaN(item.cartQuantity) || item.cartQuantity == null ? 0 : Number(item.cartQuantity);
-    return acc + quantity;
-  }, 0);
+  const cartCount = getCartQuantityTotal(cartItems);
 
   return (
     <CartContext.Provider value={{

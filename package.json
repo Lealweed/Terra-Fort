@@ -1,15 +1,16 @@
 {
-  "name": "react-example",
+  "name": "terrafort-site",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "tsx scripts/dev-server.ts",
     "build": "vite build",
-    "start": "node server.ts",
+    "start": "tsx scripts/prod-server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx --test src/services/admin/__tests__/*.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

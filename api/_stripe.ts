@@ -1,3 +1,4 @@
+import './_env.js';
 import Stripe from 'stripe';
 
 let stripeClient: Stripe | null = null;

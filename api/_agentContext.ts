@@ -23,6 +23,21 @@ type OrderRow = {
   notes: string | null;
 };
 
+function assertSupabaseOk(error: { message?: string; code?: string } | null | undefined, operation: string) {
+  if (error) {
+    throw new Error(`Agent context failed at ${operation}: ${error.message || 'unknown Supabase error'}`);
+  }
+}
+
+function isMissingRelationError(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const text = JSON.stringify(error).toLowerCase();
+  return text.includes('pgrst205')
+    || text.includes('schema cache')
+    || text.includes('could not find the table')
+    || (text.includes('relation') && text.includes('does not exist'));
+}
+
 function digitsOnly(value?: string) {
   return (value || '').replace(/\D/g, '');
 }
@@ -56,6 +71,8 @@ async function findCustomer(phone?: string, email?: string) {
       .eq('email', normalizedEmail)
       .maybeSingle();
 
+    assertSupabaseOk(byEmail.error, 'customers.byEmail');
+
     if (byEmail.data) return byEmail.data;
   }
 
@@ -66,6 +83,8 @@ async function findCustomer(phone?: string, email?: string) {
     .select('id,name,email,phone,document,notes,created_at,updated_at')
     .limit(50);
 
+  assertSupabaseOk(byPhone.error, 'customers.byPhone');
+
   return (byPhone.data || []).find((customer: any) => digitsOnly(customer.phone) === normalizedPhone) || null;
 }
 
@@ -75,11 +94,13 @@ async function findOrders({ orderCode, email, phone, customerId }: { orderCode?:
   const normalizedPhone = digitsOnly(phone);
 
   if (normalizedOrderCode) {
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('orders')
       .select('id,order_code,customer_id,customer_name,customer_email,customer_phone,status,payment_status,total,created_at,updated_at,delivery_address,notes')
       .ilike('order_code', normalizedOrderCode)
       .limit(5);
+
+    assertSupabaseOk(error, 'orders.byOrderCode');
 
     return (data || []) as OrderRow[];
   }
@@ -96,7 +117,8 @@ async function findOrders({ orderCode, email, phone, customerId }: { orderCode?:
     query = query.eq('customer_email', normalizedEmail);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  assertSupabaseOk(error, 'orders.list');
   const orders = ((data || []) as OrderRow[]).filter((order) => {
     if (!normalizedPhone) return true;
     return digitsOnly(order.customer_phone || '') === normalizedPhone;
@@ -110,7 +132,7 @@ async function loadOrderDetails(orderIds: string[]) {
     return { itemsByOrder: new Map<string, any[]>(), eventsByOrder: new Map<string, any[]>() };
   }
 
-  const [{ data: items }, { data: events }] = await Promise.all([
+  const [{ data: items, error: itemsError }, { data: events, error: eventsError }] = await Promise.all([
     supabaseAdmin
       .from('order_items')
       .select('order_id,product_name,unit_price,quantity,line_total')
@@ -121,6 +143,9 @@ async function loadOrderDetails(orderIds: string[]) {
       .in('order_id', orderIds)
       .order('created_at', { ascending: false }),
   ]);
+
+  assertSupabaseOk(itemsError, 'order_items.list');
+  assertSupabaseOk(eventsError, 'order_events.list');
 
   const itemsByOrder = new Map<string, any[]>();
   const eventsByOrder = new Map<string, any[]>();
@@ -144,33 +169,47 @@ async function findProducts(productQuery?: string) {
   const search = normalizeSearch(productQuery);
   if (!search) return [];
 
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('products')
     .select('id,sku,name,category,price,original_price,stock_level,sob_consulta,is_active')
     .or(`name.ilike.%${search}%,category.ilike.%${search}%,brand.ilike.%${search}%`)
     .eq('is_active', true)
     .limit(8);
 
+  assertSupabaseOk(error, 'products.search');
+
   return data || [];
 }
 
 async function findPromotions() {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('promotions')
     .select('id,title,slug,description,badge,discount_type,discount_value,starts_at,ends_at,applies_to_all,product_ids,metadata')
     .eq('is_active', true)
     .order('created_at', { ascending: false })
     .limit(10);
 
+  if (isMissingRelationError(error)) {
+    return [];
+  }
+
+  assertSupabaseOk(error, 'promotions.list');
+
   return (data || []).filter((promotion: any) => isPromotionActive(promotion.starts_at, promotion.ends_at));
 }
 
 async function findIntegrationStatus() {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('integration_connections')
     .select('id,name,provider,status,last_synced_at,metadata')
     .order('provider', { ascending: true })
     .limit(10);
+
+  if (isMissingRelationError(error)) {
+    return [];
+  }
+
+  assertSupabaseOk(error, 'integration_connections.list');
 
   return data || [];
 }

@@ -47,6 +47,52 @@ export type AdminCustomerDraft = {
   notes: string;
 };
 
+export type AdminDriverStatus = 'available' | 'busy' | 'inactive';
+
+export type AdminDriverRow = {
+  id: string;
+  name: string;
+  phone: string | null;
+  document: string | null;
+  status: AdminDriverStatus;
+  notes: string | null;
+  created_at: string;
+};
+
+export type AdminDriverDraft = {
+  name: string;
+  phone: string;
+  document: string;
+  status: AdminDriverStatus;
+  notes: string;
+};
+
+export type AdminSupportStatus = 'new' | 'bot' | 'waiting_human' | 'in_progress' | 'resolved';
+
+export type AdminSupportTicketRow = {
+  id: string;
+  customer_name: string;
+  customer_phone: string | null;
+  customer_email: string | null;
+  source: string;
+  intent: string;
+  status: AdminSupportStatus;
+  handoff_requested: boolean;
+  assigned_to: string | null;
+  last_message: string | null;
+  metadata: Record<string, any> | null;
+  context: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminSupportTicketDraft = {
+  status: AdminSupportStatus;
+  assigned_to: string;
+  handoff_requested: boolean;
+  internal_note: string;
+};
+
 export type AdminOrderRow = {
   id: string;
   order_code: string | null;
@@ -57,6 +103,7 @@ export type AdminOrderRow = {
   total: number;
   payment_status: string;
   created_at: string;
+  assigned_driver_id?: string | null;
   delivery_address: any;
 };
 
@@ -77,6 +124,7 @@ export type AdminOrderItemRow = {
 };
 
 export type DeliveryDraft = {
+  driverId: string;
   driverName: string;
   note: string;
 };

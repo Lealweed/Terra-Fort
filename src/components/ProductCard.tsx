@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { MessageCircle, ShoppingBag, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import SafeImage from './SafeImage';
+import { submitSupportRequest } from '../lib/customerSupport';
+import { buildProductSupportRequest } from '../lib/productSupport';
 
 interface ProductCardProps {
   product: Product;
@@ -11,6 +14,7 @@ interface ProductCardProps {
 export default function ProductCard({ product }: ProductCardProps) {
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const [supportLoading, setSupportLoading] = useState(false);
   
   const isLowStock = product.stock_level && product.stock_level <= 10 && product.stock_level > 0;
   const isOutOfStock = product.stock_level === 0;
@@ -29,6 +33,18 @@ export default function ProductCard({ product }: ProductCardProps) {
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
     addToCart(product);
+  };
+
+  const handleQuoteRequest = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSupportLoading(true);
+
+    try {
+      const result = await submitSupportRequest(buildProductSupportRequest(product, 'product_card'));
+      window.open(result.whatsappUrl, '_blank');
+    } finally {
+      setSupportLoading(false);
+    }
   };
 
   return (
@@ -127,11 +143,12 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="pt-5 border-t border-gray-50 mt-2">
             {product.sob_consulta ? (
               <button 
-                onClick={handleAddToCart}
-                className="w-full bg-[#25D366] hover:bg-[#20b858] hover:-translate-y-1 text-white flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm md:text-base transition-all hover:shadow-lg hover:shadow-[#25D366]/30 active:scale-95"
+                onClick={handleQuoteRequest}
+                disabled={supportLoading}
+                className="w-full bg-[#25D366] hover:bg-[#20b858] hover:-translate-y-1 text-white disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm md:text-base transition-all hover:shadow-lg hover:shadow-[#25D366]/30 active:scale-95"
               >
                 <MessageCircle className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
-                <span>Zap Cotação</span>
+                <span>{supportLoading ? 'Abrindo atendimento...' : 'Zap Cotação'}</span>
               </button>
             ) : (
               <button 

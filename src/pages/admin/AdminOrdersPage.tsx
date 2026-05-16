@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, MapPin, PackageCheck, Phone, Truck } from 'lucide-react';
-import type { AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow } from './admin-types';
+import type { AdminDriverRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow } from './admin-types';
 import { buildOrderDeliverySnapshot, buildOrdersOperationalSummary, filterOrders, summarizeOrderItems } from '../../services/admin/orders';
 
 type Props = {
   orders: AdminOrderRow[];
+  drivers: AdminDriverRow[];
   selectedOrderId: string;
   orderSearch: string;
   orderStatusFilter: string;
@@ -21,6 +22,7 @@ type Props = {
 
 export default function AdminOrdersPage({
   orders,
+  drivers,
   selectedOrderId,
   orderSearch,
   orderStatusFilter,
@@ -36,8 +38,8 @@ export default function AdminOrdersPage({
 }: Props) {
   const filteredOrders = filterOrders(orders, orderSearch, orderStatusFilter);
   const itemsSummary = summarizeOrderItems(orderItems);
-  const summary = buildOrdersOperationalSummary(filteredOrders);
-  const deliverySnapshot = buildOrderDeliverySnapshot(selectedOrder);
+  const summary = buildOrdersOperationalSummary(filteredOrders, drivers);
+  const deliverySnapshot = buildOrderDeliverySnapshot(selectedOrder, drivers);
   const money = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
   return (
@@ -63,7 +65,7 @@ export default function AdminOrdersPage({
         </div>
         <div className="divide-y max-h-[560px] overflow-auto">
           {filteredOrders.map((order) => (
-            <OrderRowCard key={order.id} order={order} selected={selectedOrderId === order.id} money={money} onClick={() => onSelectOrder(order.id)} />
+            <OrderRowCard key={order.id} order={order} drivers={drivers} selected={selectedOrderId === order.id} money={money} onClick={() => onSelectOrder(order.id)} />
           ))}
           {filteredOrders.length === 0 && <p className="p-4 text-sm text-gray-500">Nenhum pedido encontrado.</p>}
         </div>
@@ -145,8 +147,8 @@ export default function AdminOrdersPage({
   );
 }
 
-function OrderRowCard({ order, selected, money, onClick }: { order: AdminOrderRow; selected: boolean; money: (value: number) => string; onClick: () => void }) {
-  const delivery = buildOrderDeliverySnapshot(order);
+function OrderRowCard({ order, drivers, selected, money, onClick }: { order: AdminOrderRow; drivers: AdminDriverRow[]; selected: boolean; money: (value: number) => string; onClick: () => void }) {
+  const delivery = buildOrderDeliverySnapshot(order, drivers);
 
   return (
     <button onClick={onClick} className={`w-full text-left p-4 transition-colors ${selected ? 'bg-orange-50' : 'hover:bg-gray-50'}`}>

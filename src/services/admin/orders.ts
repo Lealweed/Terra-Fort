@@ -1,4 +1,4 @@
-import type { AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow } from '../../pages/admin/admin-types';
+import type { AdminDriverRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow } from '../../pages/admin/admin-types';
 import { buildMapsSearchUrl, buildPhoneHref, summarizeDeliveryAddress } from './delivery';
 
 async function getSupabase() {
@@ -24,15 +24,19 @@ export function summarizeOrderItems(items: AdminOrderItemRow[]) {
   };
 }
 
-export function buildOrderDeliverySnapshot(order?: AdminOrderRow | null) {
+export function buildOrderDeliverySnapshot(order?: AdminOrderRow | null, drivers: AdminDriverRow[] = []) {
   const meta = order?.delivery_address && typeof order.delivery_address === 'object' ? order.delivery_address : {};
-  const driverName = typeof meta.driver_name === 'string' ? meta.driver_name.trim() : '';
+  const assignedDriver = drivers.find((driver) => driver.id === order?.assigned_driver_id) || null;
+  const legacyDriverName = typeof meta.driver_name === 'string' ? meta.driver_name.trim() : '';
   const occurrence = typeof meta.occurrence === 'string' ? meta.occurrence.trim() : '';
   const proofUrl = typeof meta.proofUrl === 'string' ? meta.proofUrl.trim() : '';
   const logisticsStatus = mapOrderToLogisticsStatus(order?.status);
+  const driverName = assignedDriver?.name || legacyDriverName;
+  const driverPhone = assignedDriver?.phone || '';
 
   return {
     driverName,
+    driverPhone,
     occurrence,
     proofUrl,
     hasDriver: Boolean(driverName),
@@ -44,10 +48,10 @@ export function buildOrderDeliverySnapshot(order?: AdminOrderRow | null) {
   };
 }
 
-export function buildOrdersOperationalSummary(orders: AdminOrderRow[]) {
+export function buildOrdersOperationalSummary(orders: AdminOrderRow[], drivers: AdminDriverRow[] = []) {
   return orders.reduce(
     (acc, order) => {
-      const snapshot = buildOrderDeliverySnapshot(order);
+      const snapshot = buildOrderDeliverySnapshot(order, drivers);
       acc.total += 1;
       if ((order.status === 'Pago' || order.status === 'Pendente') && !snapshot.hasDriver) acc.awaitingAssignment += 1;
       if (snapshot.logisticsStatus === 'Em rota') acc.inTransit += 1;

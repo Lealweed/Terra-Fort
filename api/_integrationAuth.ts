@@ -1,3 +1,4 @@
+import './_env.js';
 type Req = any;
 
 function readHeader(req: Req, key: string): string | undefined {

@@ -5,11 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { submitSupportRequest } from '../lib/customerSupport';
+import { getStripeCheckoutAvailability, getStripeCheckoutErrorMessage } from '../lib/cartCheckout';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
+const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY?.trim();
+const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
 
 export default function CartDrawer() {
-  const { isCartOpen, setIsCartOpen, cartItems, updateQuantity, removeFromCart, cartTotal, clearCart } = useCart();
+  const { isCartOpen, setIsCartOpen, cartItems, updateQuantity, removeFromCart, cartTotal, clearCart, cartCount } = useCart();
   const navigate = useNavigate();
   const [isStripeLoading, setIsStripeLoading] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'address'>('cart');
@@ -32,6 +35,7 @@ export default function CartDrawer() {
   // Guard against undefined cart items
   const validCartItems = cartItems || [];
   const hasSobConsulta = validCartItems.some(item => item.sob_consulta);
+  const stripeAvailability = getStripeCheckoutAvailability(stripePublicKey);
 
   const generateWhatsAppMessage = () => {
     let message = "Olá! Gostaria de fechar o seguinte pedido/orçamento:\n\n";
@@ -62,10 +66,10 @@ export default function CartDrawer() {
       message += `\n*Total Parcial (itens com preço):* ${formatPrice(cartTotal || 0)}`;
     }
     
-    return encodeURIComponent(message);
+    return message;
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (checkoutStep === 'cart') {
       setCheckoutStep('address');
       return;
@@ -77,13 +81,46 @@ export default function CartDrawer() {
       return;
     }
 
-    const whatsappNumber = "5594999346107";
-    window.open(`https://wa.me/${whatsappNumber}?text=${generateWhatsAppMessage()}`, '_blank');
+    const message = generateWhatsAppMessage();
+    const result = await submitSupportRequest({
+      source: 'cart_checkout',
+      intent: 'quote_request',
+      message,
+      customer: {
+        name: formData.name,
+        phone: formData.phone,
+        address: `${formData.address}, ${formData.number}${formData.complement ? ` - ${formData.complement}` : ''}`,
+        neighborhood: formData.neighborhood,
+        city: formData.city,
+        cep: formData.cep,
+      },
+      items: validCartItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.cartQuantity || 1,
+        unitPrice: Number(item.price || 0),
+        sobConsulta: !!item.sob_consulta,
+      })),
+      totals: {
+        subtotal: Number(cartTotal || 0),
+        hasSobConsulta,
+      },
+      metadata: {
+        channel: 'site_cart',
+      },
+    });
+
+    window.open(result.whatsappUrl, '_blank');
   };
 
   const handleStripeCheckout = async () => {
     if (checkoutStep === 'cart') {
       setCheckoutStep('address');
+      return;
+    }
+
+    if (!stripeAvailability.available) {
+      alert(stripeAvailability.customerMessage || 'Pagamento online indisponível neste ambiente. Continue pelo WhatsApp.');
       return;
     }
 
@@ -96,7 +133,7 @@ export default function CartDrawer() {
     try {
       setIsStripeLoading(true);
       const stripe = await stripePromise;
-      if (!stripe) throw new Error("Stripe is not initialized");
+      if (!stripe) throw new Error('Stripe is not initialized: missing VITE_STRIPE_PUBLIC_KEY');
 
       const { data: authData } = await supabase.auth.getUser();
       const customerEmail = authData.user?.email || null;
@@ -177,8 +214,8 @@ export default function CartDrawer() {
 
       const session = await response.json();
 
-      if (session.error) {
-        throw new Error(session.error);
+      if (!response.ok || session.error) {
+        throw new Error(session.error || 'Stripe checkout indisponível neste ambiente.');
       }
 
       const stripeAny = stripe as unknown as { redirectToCheckout?: (args: { sessionId: string }) => Promise<unknown> };
@@ -188,7 +225,7 @@ export default function CartDrawer() {
       await stripeAny.redirectToCheckout({ sessionId: session.id });
     } catch (error) {
       console.error("Stripe checkout error:", error);
-      alert("Houve um erro ao processar o pagamento. Por favor, tente novamente.");
+      alert(getStripeCheckoutErrorMessage(error));
     } finally {
       setIsStripeLoading(false);
     }
@@ -217,7 +254,7 @@ export default function CartDrawer() {
             </div>
             <div>
               <h2 className="font-heading font-black text-xl text-brand-black tracking-tight leading-none">Meu Carrinho</h2>
-              <p className="text-xs font-bold text-gray-400 mt-1">{validCartItems.length} {validCartItems.length === 1 ? 'item' : 'itens'}</p>
+              <p className="text-xs font-bold text-gray-400 mt-1">{cartCount} {cartCount === 1 ? 'item' : 'itens'}</p>
             </div>
           </div>
           <button 
@@ -483,17 +520,33 @@ export default function CartDrawer() {
                 </button>
 
                 {!hasSobConsulta && (
-                  <button 
-                    onClick={handleStripeCheckout}
-                    disabled={isStripeLoading}
-                    className="group w-full bg-brand-black hover:bg-black text-white flex items-center justify-between py-4 px-6 rounded-xl font-bold transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-black/30 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="w-5 h-5 flex-shrink-0" />
-                      <span className="text-lg text-left leading-tight">{isStripeLoading ? 'Processando...' : 'Pagar Agora (Cartão/Pix)'}</span>
-                    </div>
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </button>
+                  <>
+                    {!stripeAvailability.available && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-left">
+                        <p className="text-xs font-semibold text-amber-900 leading-relaxed">
+                          {stripeAvailability.customerMessage}
+                        </p>
+                        {stripeAvailability.operatorMessage && (
+                          <p className="text-[11px] text-amber-800 mt-2 leading-relaxed">
+                            Operação local: {stripeAvailability.operatorMessage}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <button 
+                      onClick={handleStripeCheckout}
+                      disabled={isStripeLoading || !stripeAvailability.available}
+                      className="group w-full bg-brand-black hover:bg-black text-white flex items-center justify-between py-4 px-6 rounded-xl font-bold transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-black/30 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-3">
+                        <CreditCard className="w-5 h-5 flex-shrink-0" />
+                        <span className="text-lg text-left leading-tight">
+                          {isStripeLoading ? 'Processando...' : stripeAvailability.available ? 'Pagar Agora (Cartão/Pix)' : 'Pagamento Online Indisponível'}
+                        </span>
+                      </div>
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </>
                 )}
               </div>
             )}
