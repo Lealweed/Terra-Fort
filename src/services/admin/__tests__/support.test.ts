@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildCreateSupportTicketPayload,
   buildSupportSummary,
   buildSupportTicketPayload,
   buildSupportTicketMetadata,
@@ -142,5 +143,47 @@ test('buildSupportTicketPayload normaliza strings e atualiza flags de handoff', 
       handoff_requested: false,
       internal_note: 'Cliente orientado e orçamento enviado',
     },
+  );
+});
+
+test('buildCreateSupportTicketPayload cria payload seguro para abertura manual', () => {
+  assert.deepEqual(
+    buildCreateSupportTicketPayload({
+      customer_name: '  Maria Silva  ',
+      customer_phone: ' 85999990000 ',
+      customer_email: ' ',
+      source: '',
+      intent: '',
+      last_message: ' ',
+      handoff_requested: true,
+    }),
+    {
+      customer_name: 'Maria Silva',
+      customer_phone: '85999990000',
+      customer_email: null,
+      source: 'admin_manual',
+      intent: 'manual_followup',
+      status: 'new',
+      handoff_requested: true,
+      assigned_to: null,
+      last_message: 'Ticket criado manualmente pelo admin.',
+      metadata: {
+        created_by: 'admin_panel',
+        created_manually: true,
+      },
+    },
+  );
+
+  assert.throws(
+    () => buildCreateSupportTicketPayload({
+      customer_name: '',
+      customer_phone: '',
+      customer_email: '',
+      source: 'admin_manual',
+      intent: 'manual_followup',
+      last_message: 'teste',
+      handoff_requested: false,
+    }),
+    /Nome do cliente é obrigatório/,
   );
 });

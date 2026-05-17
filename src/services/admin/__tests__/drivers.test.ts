@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDriverPayload, toDriverDraft, validateDriverDraft } from '../drivers';
+import { buildDriverDeactivationNote, buildDriverPayload, toDriverDraft, validateDriverDraft } from '../drivers';
 
 test('toDriverDraft fornece valores seguros para novo cadastro e edição', () => {
   assert.deepEqual(toDriverDraft(), {
@@ -45,5 +45,17 @@ test('buildDriverPayload normaliza campos vazios e mantém status válido', () =
       status: 'busy',
       notes: 'Rota manhã',
     },
+  );
+});
+
+test('buildDriverDeactivationNote preserva histórico e anexa motivo de desativação', () => {
+  assert.equal(
+    buildDriverDeactivationNote('Atende região central', 'mudança de escala'),
+    'Atende região central\nDesativado: mudança de escala',
+  );
+
+  assert.equal(
+    buildDriverDeactivationNote('', ''),
+    'Desativado manualmente no painel admin.',
   );
 });

@@ -7,6 +7,9 @@ async function getSupabase() {
 
 const validStatuses: AdminDriverStatus[] = ['available', 'busy', 'inactive'];
 
+// Produção: não deletar entregador fisicamente.
+// Política: desativar (status=inactive) para manter rastreabilidade operacional.
+
 export function toDriverDraft(driver?: AdminDriverRow | null): AdminDriverDraft {
   return {
     name: driver?.name || '',
@@ -31,6 +34,13 @@ export function buildDriverPayload(draft: AdminDriverDraft) {
     status: validStatuses.includes(draft.status) ? draft.status : 'available',
     notes: draft.notes.trim() || null,
   };
+}
+
+export function buildDriverDeactivationNote(currentNotes: string | null | undefined, reason = '') {
+  const normalizedReason = reason.trim();
+  const noteSuffix = normalizedReason ? `Desativado: ${normalizedReason}` : 'Desativado manualmente no painel admin.';
+  const base = typeof currentNotes === 'string' ? currentNotes.trim() : '';
+  return base ? `${base}\n${noteSuffix}` : noteSuffix;
 }
 
 export async function listDrivers(): Promise<AdminDriverRow[]> {
@@ -67,6 +77,27 @@ export async function updateDriver(id: string, draft: AdminDriverDraft) {
   const { error } = await supabase
     .from('delivery_drivers')
     .update(buildDriverPayload(draft))
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function deactivateDriver(id: string, reason = '') {
+  const supabase = await getSupabase();
+
+  const { data: current, error: currentError } = await supabase
+    .from('delivery_drivers')
+    .select('notes')
+    .eq('id', id)
+    .single();
+
+  if (currentError) throw currentError;
+
+  const notes = buildDriverDeactivationNote(current?.notes as string | null | undefined, reason);
+
+  const { error } = await supabase
+    .from('delivery_drivers')
+    .update({ status: 'inactive', notes })
     .eq('id', id);
 
   if (error) throw error;
