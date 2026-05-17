@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, FileText, MessageSquareMore, PackageCheck, Settings, Truck, Users, Wrench, LayoutDashboard, ShoppingBag, PenTool, ChevronLeft, ChevronRight, Boxes, CircleDollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { AdminCustomerDraft, AdminCustomerRow, AdminDriverDraft, AdminDriverRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow, AdminSupportTicketDraft, AdminSupportTicketRow, InventoryMovementRow, ProductDraft, ProductRow } from './admin-types';
+import type { AdminCustomerDraft, AdminCustomerRow, AdminDriverDraft, AdminDriverRow, AdminOrderEventRow, AdminOrderItemRow, AdminOrderRow, AdminSupportStatus, AdminSupportTicketDraft, AdminSupportTicketRow, InventoryMovementRow, ProductDraft, ProductRow } from './admin-types';
 import { createProduct as createProductRecord, deleteProduct as deleteProductRecord, emptyProductDraft, listProducts, toProductDraft, updateProduct as updateProductRecord, uploadProductImage } from '../../services/admin/products';
 import { createCustomer as createCustomerRecord, listCustomers, toCustomerDraft, updateCustomer as updateCustomerRecord, validateCustomerDraft, deleteCustomer as deleteCustomerRecord } from '../../services/admin/customers';
 import { createDriver as createDriverRecord, listDrivers, toDriverDraft, updateDriver as updateDriverRecord, validateDriverDraft } from '../../services/admin/drivers';
@@ -506,6 +506,34 @@ export default function Dashboard() {
     }
   };
 
+  const saveSupportBulk = async (
+    ticketIds: string[],
+    patch: { status?: AdminSupportStatus; assigned_to?: string; handoff_requested?: boolean },
+  ) => {
+    if (!ticketIds.length) return;
+
+    setMsg('');
+
+    try {
+      for (const ticketId of ticketIds) {
+        const baseTicket = supportTickets.find((ticket) => ticket.id === ticketId);
+        if (!baseTicket) continue;
+
+        await updateSupportTicket(ticketId, {
+          status: patch.status ?? baseTicket.status,
+          assigned_to: patch.assigned_to ?? baseTicket.assigned_to ?? '',
+          handoff_requested: patch.handoff_requested ?? baseTicket.handoff_requested,
+          internal_note: typeof baseTicket.metadata?.internal_note === 'string' ? baseTicket.metadata.internal_note : '',
+        });
+      }
+
+      setMsg(`Atendimento em lote aplicado em ${ticketIds.length} ticket(s).`);
+      await loadSupport();
+    } catch (error: any) {
+      setMsg(`Erro ao aplicar ação em lote: ${error.message}`);
+    }
+  };
+
   const saveContent = async () => {
     const { error: e1 } = await supabase.from('site_content').upsert({
       section_key: 'home.hero',
@@ -865,6 +893,7 @@ export default function Dashboard() {
             onSelectTicket={setSelectedSupportTicketId}
             onDraftChange={(updater) => setDraftSupportTicket((current) => updater(current))}
             onSaveTicket={saveSupport}
+            onBulkUpdateTickets={saveSupportBulk}
           />
         )}
 
