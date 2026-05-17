@@ -34,6 +34,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     || undefined;
 
   try {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      if (requestId) {
+        res.setHeader('x-request-id', requestId);
+      }
+
+      console.warn('[support-intake] invalid_payload', {
+        requestId: requestId || 'unknown',
+        method: req?.method || 'unknown',
+      });
+
+      return res.status(400).json({
+        error: 'Dados de atendimento inválidos. Continue pelo WhatsApp.',
+        requestId: requestId || 'unknown',
+        whatsappUrl: buildEmergencyWhatsappUrl(undefined),
+      });
+    }
+
     const result = await handleSupportIntake(req.body || {}, { requestId, origin: 'vercel_api' });
     if (result?.body?.requestId) {
       res.setHeader('x-request-id', result.body.requestId);

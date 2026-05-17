@@ -42,6 +42,7 @@ type SupportPayload = {
 const DEFAULT_WHATSAPP_NUMBER = '5594999346107';
 const DEFAULT_N8N_TIMEOUT_MS = 7000;
 const DEFAULT_PERSIST_TIMEOUT_MS = 5000;
+const DEFAULT_TOTAL_TIMEOUT_MS = 12000;
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_ITEMS = 50;
 
@@ -106,16 +107,20 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, onTimeout: () =>
 
 function normalizePayload(input: Req): SupportPayload {
   const body = (input && typeof input === 'object' && !Array.isArray(input)) ? input : {};
+  const asRecord = (value: unknown) => (value && typeof value === 'object' && !Array.isArray(value)) ? value : undefined;
+  const normalizedItems = Array.isArray(body.items)
+    ? body.items.filter((item) => item && typeof item === 'object' && !Array.isArray(item))
+    : [];
 
   return {
     source: typeof body.source === 'string' ? body.source : 'site',
     intent: typeof body.intent === 'string' ? body.intent : 'quote_request',
     message: typeof body.message === 'string' ? body.message : '',
-    customer: body.customer && typeof body.customer === 'object' ? body.customer : undefined,
-    product: body.product && typeof body.product === 'object' ? body.product : undefined,
-    items: Array.isArray(body.items) ? body.items : [],
-    totals: body.totals && typeof body.totals === 'object' ? body.totals : undefined,
-    metadata: body.metadata && typeof body.metadata === 'object' ? body.metadata : undefined,
+    customer: asRecord(body.customer) as SupportPayload['customer'],
+    product: asRecord(body.product) as SupportPayload['product'],
+    items: normalizedItems as SupportPayload['items'],
+    totals: asRecord(body.totals) as SupportPayload['totals'],
+    metadata: asRecord(body.metadata) as SupportPayload['metadata'],
   };
 }
 
@@ -317,10 +322,11 @@ async function persistSupportTicket(payload: SupportPayload, whatsappUrl: string
       .single();
 
     if (error) {
+      const safeError = sanitizeErrorMessage(error.message);
       return {
         persisted: false,
         ticketId: null,
-        persistenceError: error.message,
+        persistenceError: safeError || 'Falha ao persistir ticket',
       };
     }
 
@@ -340,6 +346,7 @@ async function persistSupportTicket(payload: SupportPayload, whatsappUrl: string
 }
 
 export async function handleSupportIntake(body: Req, options?: SupportIntakeOptions) {
+  const startedAt = Date.now();
   const initialPayload = normalizePayload(body);
   const requestId = resolveRequestId(initialPayload, options);
   const { payload, issues } = sanitizePayloadForVolume(initialPayload);
@@ -356,18 +363,42 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
     });
   }
 
-  const [persistence, n8n] = await Promise.all([
-    withTimeout(
-      persistSupportTicket(payload, whatsappUrl, requestId),
-      persistTimeoutMs,
-      () => ({
-        persisted: false,
-        ticketId: null,
-        persistenceError: `Timeout ao persistir ticket (${persistTimeoutMs}ms)`,
-      }),
-    ),
-    forwardToN8n(payload, whatsappUrl, requestId),
-  ]);
+  const totalTimeoutMs = resolveTimeoutMs(process.env.SUPPORT_INTAKE_TOTAL_TIMEOUT_MS, DEFAULT_TOTAL_TIMEOUT_MS);
+
+  const [persistence, n8n] = await withTimeout(
+    Promise.all([
+      withTimeout(
+        persistSupportTicket(payload, whatsappUrl, requestId),
+        persistTimeoutMs,
+        () => ({
+          persisted: false,
+          ticketId: null,
+          persistenceError: `Timeout ao persistir ticket (${persistTimeoutMs}ms)`,
+        }),
+      ),
+      forwardToN8n(payload, whatsappUrl, requestId),
+    ]),
+    totalTimeoutMs,
+    () => {
+      console.error('[support-intake] total_timeout', {
+        requestId,
+        timeoutMs: totalTimeoutMs,
+      });
+
+      return [
+        {
+          persisted: false,
+          ticketId: null,
+          persistenceError: `Timeout geral no intake (${totalTimeoutMs}ms)`,
+        },
+        {
+          forwardedToN8n: false,
+          n8nStatus: null,
+          n8nError: `Timeout geral no intake (${totalTimeoutMs}ms)`,
+        },
+      ] as const;
+    },
+  );
 
   if (!persistence.persisted) {
     console.error('[support-intake] persist_failed', {
@@ -387,11 +418,25 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
   }
 
   const degraded = !n8n.forwardedToN8n || !persistence.persisted;
+  const degradedReasons = [
+    !n8n.forwardedToN8n ? 'n8n_unavailable' : null,
+    !persistence.persisted ? 'persistence_failed' : null,
+  ].filter(Boolean);
   const finalMessage = !n8n.forwardedToN8n
     ? 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.'
     : degraded
       ? 'Recebemos sua solicitação. Se necessário, continue pelo WhatsApp para agilizar.'
       : 'Solicitação recebida com sucesso. Você pode continuar pelo WhatsApp se preferir.';
+
+  console.info('[support-intake] completed', {
+    requestId,
+    origin: options?.origin || 'unknown',
+    source: payload.source || 'site',
+    intent: payload.intent || 'quote_request',
+    durationMs: Date.now() - startedAt,
+    degraded,
+    degradedReasons,
+  });
 
   return {
     status: 200,
@@ -401,10 +446,12 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
       requestId,
       forwardedToN8n: n8n.forwardedToN8n,
       n8nStatus: n8n.n8nStatus,
-      n8nError: n8n.n8nError,
+      n8nError: !n8n.forwardedToN8n ? 'Atendimento automático temporariamente indisponível.' : null,
+      n8nErrorCode: !n8n.forwardedToN8n ? 'N8N_UNAVAILABLE' : null,
       persisted: persistence.persisted,
       ticketId: persistence.ticketId,
-      persistenceError: persistence.persistenceError,
+      persistenceError: !persistence.persisted ? 'Não foi possível registrar o atendimento automaticamente.' : null,
+      persistenceErrorCode: !persistence.persisted ? 'PERSISTENCE_FAILED' : null,
       whatsappUrl,
       fallbackMessage: !n8n.forwardedToN8n
         ? 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.'
