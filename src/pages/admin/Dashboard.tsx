@@ -123,14 +123,21 @@ export default function Dashboard() {
   };
 
   const loadOrders = async () => {
-    const { data } = await supabase
-      .from('orders')
-      .select('id,order_code,customer_name,customer_phone,customer_email,status,total,payment_status,created_at,assigned_driver_id,delivery_address')
-      .order('created_at', { ascending: false })
-      .limit(300);
-    const list = (data || []) as OrderRow[];
-    setOrders(list);
-    setSelectedOrderId((prev) => list.find((x) => x.id === prev)?.id || list[0]?.id || '');
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id,order_code,customer_name,customer_phone,customer_email,status,total,payment_status,created_at,assigned_driver_id,delivery_address')
+        .order('created_at', { ascending: false })
+        .limit(300);
+      
+      if (error) throw error;
+      
+      const list = (data || []) as OrderRow[];
+      setOrders(list);
+      setSelectedOrderId((prev) => list.find((x) => x.id === prev)?.id || list[0]?.id || '');
+    } catch (e: any) {
+      setMsg(`Erro ao carregar pedidos: ${e.message}`);
+    }
   };
 
   const loadDrivers = async () => {

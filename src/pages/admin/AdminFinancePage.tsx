@@ -9,7 +9,7 @@ import {
   type AdminFinanceTransactionRow,
   type AdminFinanceTransactionDraft
 } from '../../services/admin/finance';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 
 type Props = {
   orders: AdminOrderRow[];
@@ -80,6 +80,17 @@ export default function AdminFinancePage({ orders, transactions, onOpenOrder, on
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [filteredOrders, transactions]);
 
+  // Category distribution for expenses
+  const categoryData = useMemo(() => {
+    const map = new Map<string, number>();
+    transactions.filter(t => t.type === 'EXPENSE').forEach(t => {
+      map.set(t.category, (map.get(t.category) || 0) + t.amount);
+    });
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
+  }, [transactions]);
+
+  const COLORS = ['#f97316', '#0f172a', '#ef4444', '#3b82f6', '#22c55e', '#a855f7'];
+
   const recentOrders = useMemo(() => recentFinancialOrders(filteredOrders, 8), [filteredOrders]);
   const queue = useMemo(() => buildFinancePendingQueue(filteredOrders), [filteredOrders]);
   const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -117,25 +128,64 @@ export default function AdminFinancePage({ orders, transactions, onOpenOrder, on
         <MetricCard title="Pedidos Pendentes" value={String(summary.pendingOrders)} helper="Aguardando pagamento" icon={<Clock3 className="w-6 h-6" />} tone="orange" />
       </div>
 
-      {/* Chart Section */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-        <h3 className="font-black text-lg text-gray-900 mb-6">Fluxo de Caixa (Receitas vs Despesas)</h3>
-        <div className="h-[300px] w-full">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} tickFormatter={(val) => `R$ ${val}`} />
-                <RechartsTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                <Bar dataKey="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-full flex items-center justify-center text-gray-400 text-sm font-bold">Sem dados suficientes para gerar o gráfico neste período.</div>
-          )}
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+          <h3 className="font-black text-lg text-gray-900 mb-6">Fluxo de Caixa (Receitas vs Despesas)</h3>
+          <div className="h-[300px] w-full">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} tickFormatter={(val) => `R$ ${val}`} />
+                  <RechartsTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar dataKey="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm font-bold">Sem dados suficientes para gerar o gráfico neste período.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+          <h3 className="font-black text-lg text-gray-900 mb-6">Despesas por Categoria</h3>
+          <div className="h-[300px] w-full relative">
+            {categoryData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {categoryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip />
+                    <Legend verticalAlign="bottom" height={36}/>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-9">
+                   <div className="text-center">
+                     <p className="text-[10px] font-bold text-gray-400 uppercase">Total Saídas</p>
+                     <p className="font-black text-sm text-gray-900">{money(summary.totalExpenses)}</p>
+                   </div>
+                </div>
+              </>
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm font-bold text-center">Nenhuma despesa registrada para análise.</div>
+            )}
+          </div>
         </div>
       </div>
 
