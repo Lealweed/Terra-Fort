@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Bot, CheckCheck, ClipboardList, MessageSquareMore, Search, ShieldAlert, UserRoundCheck, Users } from 'lucide-react';
 import type { AdminSupportTicketDraft, AdminSupportTicketRow, AdminSupportStatus } from './admin-types';
 import { buildSupportSummary, filterSupportTickets } from '../../services/admin/support';
@@ -61,6 +61,9 @@ export default function AdminSupportPage({
 }: Props) {
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [bulkAssignee, setBulkAssignee] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const pageSize = 40;
 
   const filtered = useMemo(() => filterSupportTickets(tickets, search, statusFilter), [tickets, search, statusFilter]);
   const summary = useMemo(() => buildSupportSummary(filtered), [filtered]);
@@ -80,6 +83,11 @@ export default function AdminSupportPage({
     return filtered.filter((ticket) => ticket.status !== 'resolved' && getSlaMinutes(ticket) >= 30).length;
   }, [filtered]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  const pagedTickets = filtered.slice(pageStart, pageStart + pageSize);
+
   const toggleSelection = (ticketId: string) => {
     setSelectedTicketIds((current) => current.includes(ticketId) ? current.filter((id) => id !== ticketId) : [...current, ticketId]);
   };
@@ -98,6 +106,59 @@ export default function AdminSupportPage({
     await onBulkUpdateTickets(selectedTicketIds, patch);
     setSelectedTicketIds([]);
   };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (safePage !== currentPage) setCurrentPage(safePage);
+  }, [safePage, currentPage]);
+
+  useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase() || '';
+      const isTyping = tagName === 'input' || tagName === 'textarea' || tagName === 'select' || !!target?.isContentEditable;
+
+      if (event.key === '/' && !isTyping) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      if (isTyping) return;
+
+      if (event.key === 'j') {
+        event.preventDefault();
+        if (!pagedTickets.length) return;
+        const currentIndex = pagedTickets.findIndex((ticket) => ticket.id === selectedTicketId);
+        const nextIndex = currentIndex >= 0 ? Math.min(currentIndex + 1, pagedTickets.length - 1) : 0;
+        onSelectTicket(pagedTickets[nextIndex].id);
+      }
+
+      if (event.key === 'k') {
+        event.preventDefault();
+        if (!pagedTickets.length) return;
+        const currentIndex = pagedTickets.findIndex((ticket) => ticket.id === selectedTicketId);
+        const prevIndex = currentIndex >= 0 ? Math.max(currentIndex - 1, 0) : 0;
+        onSelectTicket(pagedTickets[prevIndex].id);
+      }
+
+      if (event.key === 'a' && selectedTicketId) {
+        event.preventDefault();
+        void onBulkUpdateTickets([selectedTicketId], { status: 'in_progress', handoff_requested: false });
+      }
+
+      if (event.key === 'r' && selectedTicketId) {
+        event.preventDefault();
+        void onBulkUpdateTickets([selectedTicketId], { status: 'resolved', handoff_requested: false, assigned_to: '' });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [onBulkUpdateTickets, onSelectTicket, pagedTickets, selectedTicketId]);
 
   return (
     <div className="space-y-6">
@@ -135,19 +196,19 @@ export default function AdminSupportPage({
             </div>
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-400" />
-              <input value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Buscar por cliente, contato ou mensagem" className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-orange" />
+              <input ref={searchInputRef} value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Buscar por cliente, contato ou mensagem" className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-orange" />
             </div>
             <div className="flex items-center justify-between text-xs text-gray-500">
               <label className="inline-flex items-center gap-2 font-semibold cursor-pointer">
                 <input type="checkbox" checked={filtered.length > 0 && filtered.every((t) => selectedTicketIds.includes(t.id))} onChange={toggleSelectAllFiltered} className="h-4 w-4 rounded border-gray-300 text-brand-orange focus:ring-brand-orange" />
                 Selecionar todos filtrados
               </label>
-              <span>{selectedInFilterCount} selecionados</span>
+              <span>{selectedInFilterCount} selecionados • / buscar • j/k navegar • a assumir • r resolver</span>
             </div>
           </div>
 
           <div className="flex-1 overflow-auto divide-y divide-gray-100">
-            {filtered.map((ticket) => {
+            {pagedTickets.map((ticket) => {
               const slaMinutes = getSlaMinutes(ticket);
               const isCritical = ticket.status !== 'resolved' && slaMinutes >= 30;
               return (
@@ -180,6 +241,14 @@ export default function AdminSupportPage({
               );
             })}
             {filtered.length === 0 && <div className="p-6 text-sm text-gray-500">Nenhum ticket encontrado.</div>}
+          </div>
+          <div className="border-t border-gray-100 bg-gray-50/70 px-4 py-3 flex items-center justify-between text-xs text-gray-600">
+            <span>Mostrando {filtered.length === 0 ? 0 : pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} de {filtered.length}</span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="rounded-lg border border-gray-200 bg-white px-2 py-1 font-semibold disabled:opacity-50">Anterior</button>
+              <span>Página {safePage}/{totalPages}</span>
+              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="rounded-lg border border-gray-200 bg-white px-2 py-1 font-semibold disabled:opacity-50">Próxima</button>
+            </div>
           </div>
         </div>
 
