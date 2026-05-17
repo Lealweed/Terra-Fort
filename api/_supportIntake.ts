@@ -1,5 +1,6 @@
 import './_env.js';
 import { supabaseAdmin } from './_supabaseAdmin.js';
+import { randomUUID } from 'node:crypto';
 type Req = any;
 
 type SupportPayload = {
@@ -41,6 +42,13 @@ type SupportPayload = {
 const DEFAULT_WHATSAPP_NUMBER = '5594999346107';
 const DEFAULT_N8N_TIMEOUT_MS = 7000;
 const DEFAULT_PERSIST_TIMEOUT_MS = 5000;
+const MAX_MESSAGE_LENGTH = 2000;
+const MAX_ITEMS = 50;
+
+type SupportIntakeOptions = {
+  requestId?: string;
+  origin?: string;
+};
 
 function digitsOnly(value?: string) {
   return (value || '').replace(/\D/g, '');
@@ -111,6 +119,35 @@ function normalizePayload(input: Req): SupportPayload {
   };
 }
 
+function sanitizePayloadForVolume(payload: SupportPayload): { payload: SupportPayload; issues: string[] } {
+  const issues: string[] = [];
+
+  const normalizedMessage = typeof payload.message === 'string' ? payload.message : '';
+  if (normalizedMessage.length > MAX_MESSAGE_LENGTH) {
+    issues.push(`message_truncated_${MAX_MESSAGE_LENGTH}`);
+  }
+
+  const normalizedItems = Array.isArray(payload.items) ? payload.items : [];
+  if (normalizedItems.length > MAX_ITEMS) {
+    issues.push(`items_truncated_${MAX_ITEMS}`);
+  }
+
+  return {
+    payload: {
+      ...payload,
+      message: normalizedMessage.slice(0, MAX_MESSAGE_LENGTH),
+      items: normalizedItems.slice(0, MAX_ITEMS),
+    },
+    issues,
+  };
+}
+
+function resolveRequestId(payload: SupportPayload, options?: SupportIntakeOptions) {
+  const metadataRequestId = typeof payload.metadata?.requestId === 'string' ? payload.metadata.requestId.trim() : '';
+  const optionRequestId = typeof options?.requestId === 'string' ? options.requestId.trim() : '';
+  return metadataRequestId || optionRequestId || randomUUID();
+}
+
 function buildFallbackMessage(payload: SupportPayload) {
   const parts: string[] = [];
   const existing = (payload.message || '').trim();
@@ -138,12 +175,12 @@ function buildWhatsappUrl(message: string) {
   return `https://wa.me/${getSupportWhatsappNumber()}?text=${encodeURIComponent(message)}`;
 }
 
-async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
+async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, requestId: string) {
   const webhookUrl = process.env.N8N_SUPPORT_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL;
   const webhookToken = process.env.N8N_SUPPORT_WEBHOOK_TOKEN || process.env.N8N_SHARED_SECRET || process.env.AGENT_API_KEY;
 
   if (!webhookUrl) {
-    console.warn('[support-intake] n8n_webhook_missing; fallback_whatsapp_only');
+    console.warn('[support-intake] n8n_webhook_missing; fallback_whatsapp_only', { requestId });
     return {
       forwardedToN8n: false,
       n8nStatus: null,
@@ -153,13 +190,14 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'x-request-id': requestId,
   };
 
   if (webhookToken) {
     headers['Authorization'] = `Bearer ${webhookToken}`;
     headers['x-integration-key'] = webhookToken;
   } else {
-    console.warn('[support-intake] n8n_webhook_token_missing; sending request without auth header');
+    console.warn('[support-intake] n8n_webhook_token_missing; sending request without auth header', { requestId });
   }
 
   const requestBody = {
@@ -173,6 +211,7 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
     totals: payload.totals || null,
     metadata: {
       ...(payload.metadata || {}),
+      requestId,
       fallbackWhatsappUrl: whatsappUrl,
       requestedAt: new Date().toISOString(),
     },
@@ -192,15 +231,26 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Falha ao chamar webhook n8n');
+      const safeErrorText = (errorText || 'Falha ao chamar webhook n8n').slice(0, 500);
       console.error('[support-intake] n8n_forward_failed', {
+        requestId,
         status: response.status,
-        error: sanitizeErrorMessage(errorText),
+        error: sanitizeErrorMessage(safeErrorText),
       });
       return {
         forwardedToN8n: false,
         n8nStatus: response.status,
-        n8nError: errorText.slice(0, 500),
+        n8nError: safeErrorText,
       };
+    }
+
+    // Alguns webhooks retornam 204/200 sem body; isso é aceitável para intake.
+    const responseText = await response.text().catch(() => '');
+    if (!responseText.trim()) {
+      console.warn('[support-intake] n8n_forward_empty_response', {
+        requestId,
+        status: response.status,
+      });
     }
 
     return {
@@ -209,10 +259,12 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
       n8nError: null,
     };
   } catch (error: any) {
+    const safeError = sanitizeErrorMessage(error);
     const isAbort = error?.name === 'AbortError';
 
     console.error('[support-intake] n8n_forward_exception', {
-      error: sanitizeErrorMessage(error),
+      requestId,
+      error: safeError,
     });
 
     return {
@@ -220,14 +272,14 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
       n8nStatus: null,
       n8nError: isAbort
         ? `Timeout ao chamar webhook n8n (${timeoutMs}ms)`
-        : (error?.message || 'Falha ao chamar webhook n8n'),
+        : (safeError || 'Falha ao chamar webhook n8n'),
     };
   } finally {
     clearTimeout(abortTimeout);
   }
 }
 
-async function persistSupportTicket(payload: SupportPayload, whatsappUrl: string) {
+async function persistSupportTicket(payload: SupportPayload, whatsappUrl: string, requestId: string) {
   const handoffRequested =
     payload.intent === 'human_handoff'
     || payload.intent === 'talk_to_human'
@@ -248,6 +300,7 @@ async function persistSupportTicket(payload: SupportPayload, whatsappUrl: string
         last_message: (payload.message || '').trim() || null,
         metadata: {
           ...(payload.metadata || {}),
+          requestId,
           whatsappUrl,
           product: payload.product || null,
           items: payload.items || [],
@@ -277,23 +330,35 @@ async function persistSupportTicket(payload: SupportPayload, whatsappUrl: string
       persistenceError: null,
     };
   } catch (error: any) {
+    const safeError = sanitizeErrorMessage(error);
     return {
       persisted: false,
       ticketId: null,
-      persistenceError: error?.message || 'Falha ao persistir ticket',
+      persistenceError: safeError || 'Falha ao persistir ticket',
     };
   }
 }
 
-export async function handleSupportIntake(body: Req) {
-  const payload = normalizePayload(body);
+export async function handleSupportIntake(body: Req, options?: SupportIntakeOptions) {
+  const initialPayload = normalizePayload(body);
+  const requestId = resolveRequestId(initialPayload, options);
+  const { payload, issues } = sanitizePayloadForVolume(initialPayload);
   const message = buildFallbackMessage(payload);
   const whatsappUrl = buildWhatsappUrl(message);
   const persistTimeoutMs = resolveTimeoutMs(process.env.SUPPORT_PERSIST_TIMEOUT_MS, DEFAULT_PERSIST_TIMEOUT_MS);
 
+  if (issues.length > 0) {
+    console.warn('[support-intake] payload_sanitized', {
+      requestId,
+      source: payload.source || 'site',
+      intent: payload.intent || 'quote_request',
+      issues,
+    });
+  }
+
   const [persistence, n8n] = await Promise.all([
     withTimeout(
-      persistSupportTicket(payload, whatsappUrl),
+      persistSupportTicket(payload, whatsappUrl, requestId),
       persistTimeoutMs,
       () => ({
         persisted: false,
@@ -301,11 +366,12 @@ export async function handleSupportIntake(body: Req) {
         persistenceError: `Timeout ao persistir ticket (${persistTimeoutMs}ms)`,
       }),
     ),
-    forwardToN8n(payload, whatsappUrl),
+    forwardToN8n(payload, whatsappUrl, requestId),
   ]);
 
   if (!persistence.persisted) {
     console.error('[support-intake] persist_failed', {
+      requestId,
       source: payload.source || 'site',
       intent: payload.intent || 'quote_request',
       error: sanitizeErrorMessage(persistence.persistenceError),
@@ -314,15 +380,25 @@ export async function handleSupportIntake(body: Req) {
 
   if (!n8n.forwardedToN8n) {
     console.warn('[support-intake] n8n_unavailable; returning_whatsapp_fallback', {
+      requestId,
       n8nStatus: n8n.n8nStatus,
       hasN8nError: !!n8n.n8nError,
     });
   }
 
+  const degraded = !n8n.forwardedToN8n || !persistence.persisted;
+  const finalMessage = !n8n.forwardedToN8n
+    ? 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.'
+    : degraded
+      ? 'Recebemos sua solicitação. Se necessário, continue pelo WhatsApp para agilizar.'
+      : 'Solicitação recebida com sucesso. Você pode continuar pelo WhatsApp se preferir.';
+
   return {
     status: 200,
     body: {
       ok: true,
+      degraded,
+      requestId,
       forwardedToN8n: n8n.forwardedToN8n,
       n8nStatus: n8n.n8nStatus,
       n8nError: n8n.n8nError,
@@ -333,6 +409,7 @@ export async function handleSupportIntake(body: Req) {
       fallbackMessage: !n8n.forwardedToN8n
         ? 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.'
         : null,
+      finalMessage,
     },
   };
 }
