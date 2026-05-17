@@ -35,6 +35,8 @@ export type SupportPayload = {
 
 type SupportResponse = {
   ok: boolean;
+  degraded?: boolean;
+  degradedReasons?: string[];
   forwardedToN8n: boolean;
   whatsappUrl: string;
   n8nStatus?: number | null;
@@ -120,8 +122,8 @@ function normalizeSupportPayload(payload: SupportPayload): SupportPayload {
   };
 }
 
-export function getSupportUserFallbackMessage(result: Pick<SupportResponse, 'ok' | 'n8nError'>) {
-  if (result.ok) return null;
+export function getSupportUserFallbackMessage(result: Pick<SupportResponse, 'ok' | 'degraded' | 'n8nError'>) {
+  if (result.ok && !result.degraded) return null;
   return 'Não conseguimos iniciar o atendimento automático agora. Vamos abrir o WhatsApp para você continuar.';
 }
 
@@ -185,6 +187,10 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
 
     const safeResult = {
       ok: true,
+      degraded: !!data?.degraded,
+      degradedReasons: Array.isArray(data?.degradedReasons)
+        ? data.degradedReasons.filter((reason: unknown): reason is string => typeof reason === 'string').slice(0, 10)
+        : [],
       forwardedToN8n: !!data.forwardedToN8n,
       whatsappUrl: typeof data.whatsappUrl === 'string' ? data.whatsappUrl : fallbackUrl,
       n8nStatus: typeof data.n8nStatus === 'number' ? data.n8nStatus : null,
@@ -192,10 +198,12 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
       requestId: sanitizeRequestId(data?.requestId) || requestId,
     };
 
-    if (!safeResult.forwardedToN8n) {
+    if (!safeResult.forwardedToN8n || safeResult.degraded) {
       console.warn('[support] api_degraded_fallback_available', {
         requestId: safeResult.requestId || 'unknown',
         n8nStatus: safeResult.n8nStatus,
+        degraded: !!safeResult.degraded,
+        degradedReasons: safeResult.degradedReasons || [],
         hasN8nError: !!safeResult.n8nError,
         ...summarizePayload(safePayload),
       });

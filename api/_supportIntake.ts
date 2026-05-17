@@ -66,6 +66,19 @@ function sanitizeErrorMessage(error: unknown): string {
     .slice(0, 500);
 }
 
+function isLikelyConnectionError(error: unknown): boolean {
+  if (!error) return false;
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return (
+    message.includes('fetch failed')
+    || message.includes('econnrefused')
+    || message.includes('enotfound')
+    || message.includes('eai_again')
+    || message.includes('networkerror')
+    || message.includes('network error')
+  );
+}
+
 function normalizeRequestId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.replace(/[^a-zA-Z0-9-_.]/g, '').trim();
@@ -403,7 +416,9 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
         n8nError: isAbort
           ? `Timeout ao chamar webhook n8n (${timeoutMs}ms)`
           : (safeError || 'Falha ao chamar webhook n8n'),
-        n8nErrorCode: isAbort ? 'N8N_TIMEOUT' : 'N8N_REQUEST_EXCEPTION',
+        n8nErrorCode: isAbort
+          ? 'N8N_TIMEOUT'
+          : (isLikelyConnectionError(error) ? 'N8N_CONNECTION_ERROR' : 'N8N_REQUEST_EXCEPTION'),
       };
     } finally {
       clearTimeout(abortTimeout);
@@ -568,6 +583,9 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
     : degraded
       ? 'Recebemos sua solicitação. Se necessário, continue pelo WhatsApp para agilizar.'
       : 'Solicitação recebida com sucesso. Você pode continuar pelo WhatsApp se preferir.';
+  const fallbackMessage = degraded
+    ? 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.'
+    : null;
 
   console.info('[support-intake] completed', {
     requestId,
@@ -595,9 +613,7 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
       persistenceError: !persistence.persisted ? 'Não foi possível registrar o atendimento automaticamente.' : null,
       persistenceErrorCode: !persistence.persisted ? 'PERSISTENCE_FAILED' : null,
       whatsappUrl,
-      fallbackMessage: !n8n.forwardedToN8n
-        ? 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.'
-        : null,
+      fallbackMessage,
       finalMessage,
     },
   };

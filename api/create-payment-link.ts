@@ -3,6 +3,14 @@ type VercelResponse = any;
 import { getStripe } from './_stripe.js';
 import { createPaymentLink } from '../src/server-core/payment-link.js';
 
+function sanitizeErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error || 'unknown_error');
+  return raw
+    .replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]')
+    .replace(/(token|secret|key|authorization)=[^\s&]+/gi, '$1=[REDACTED]')
+    .slice(0, 400);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -14,6 +22,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(result.status).json(result.body);
   } catch (error: any) {
-    return res.status(500).json({ error: error.message || 'Failed to create payment link' });
+    console.error('[create-payment-link] failed', {
+      method: req?.method || 'unknown',
+      hasBody: !!req?.body,
+      error: sanitizeErrorMessage(error),
+    });
+
+    return res.status(500).json({ error: 'Failed to create payment link' });
   }
 }
