@@ -124,15 +124,30 @@ export default function Dashboard() {
 
   const loadOrders = async () => {
     try {
-      const { data, error } = await supabase
+      const baseColumns = 'id,order_code,customer_name,customer_phone,customer_email,status,total,payment_status,created_at,delivery_address';
+      const withDriverColumns = `${baseColumns},assigned_driver_id`;
+
+      let response: any = await supabase
         .from('orders')
-        .select('id,order_code,customer_name,customer_phone,customer_email,status,total,payment_status,created_at,assigned_driver_id,delivery_address')
+        .select(withDriverColumns)
         .order('created_at', { ascending: false })
         .limit(300);
-      
-      if (error) throw error;
-      
-      const list = (data || []) as OrderRow[];
+
+      if (response.error && /assigned_driver_id/.test(response.error.message || '')) {
+        response = await supabase
+          .from('orders')
+          .select(baseColumns)
+          .order('created_at', { ascending: false })
+          .limit(300);
+      }
+
+      if (response.error) throw response.error;
+
+      const list = ((response.data || []) as OrderRow[]).map((order) => ({
+        ...order,
+        assigned_driver_id: order.assigned_driver_id ?? null,
+      }));
+
       setOrders(list);
       setSelectedOrderId((prev) => list.find((x) => x.id === prev)?.id || list[0]?.id || '');
     } catch (e: any) {
