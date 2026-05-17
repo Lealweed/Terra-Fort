@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import SafeImage from './SafeImage';
-import { getSupportUserFallbackMessage, submitSupportRequest } from '../lib/customerSupport';
+import { getSupportUserFallbackMessage, openSupportWhatsapp, submitSupportRequest } from '../lib/customerSupport';
 import { buildProductSupportRequest } from '../lib/productSupport';
 
 interface ProductCardProps {
@@ -43,7 +43,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       const result = await submitSupportRequest(buildProductSupportRequest(product, 'product_card'));
       const fallbackMessage = getSupportUserFallbackMessage(result);
       if (fallbackMessage) alert(fallbackMessage);
-      window.open(result.whatsappUrl, '_blank');
+      openSupportWhatsapp(result.whatsappUrl, 'product_card');
     } finally {
       setSupportLoading(false);
     }

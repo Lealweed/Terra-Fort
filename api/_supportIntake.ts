@@ -47,6 +47,7 @@ const DEFAULT_PERSIST_TIMEOUT_MS = 5000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 12000;
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_ITEMS = 50;
+const MAX_FALLBACK_MESSAGE_LENGTH = 2500;
 
 type SupportIntakeOptions = {
   requestId?: string;
@@ -69,6 +70,7 @@ function getSupportWhatsappNumber() {
   return digitsOnly(process.env.VITE_SUPPORT_WHATSAPP_NUMBER || process.env.SUPPORT_WHATSAPP_NUMBER || DEFAULT_WHATSAPP_NUMBER) || DEFAULT_WHATSAPP_NUMBER;
 }
 
+
 function resolveTimeoutMs(rawValue: string | undefined, fallbackMs: number) {
   const parsed = Number(rawValue);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -76,6 +78,20 @@ function resolveTimeoutMs(rawValue: string | undefined, fallbackMs: number) {
   }
 
   return Math.min(Math.max(Math.floor(parsed), 1000), 20000);
+}
+
+function toSafeText(value: unknown, maxLength: number) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
+function isValidHttpUrl(rawUrl: string) {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, onTimeout: () => T): Promise<T> {
@@ -115,8 +131,8 @@ function normalizePayload(input: Req): SupportPayload {
     : [];
 
   return {
-    source: typeof body.source === 'string' ? body.source : 'site',
-    intent: typeof body.intent === 'string' ? body.intent : 'quote_request',
+    source: toSafeText(body.source, 80) || 'site',
+    intent: toSafeText(body.intent, 80) || 'quote_request',
     message: typeof body.message === 'string' ? body.message : '',
     customer: asRecord(body.customer) as SupportPayload['customer'],
     product: asRecord(body.product) as SupportPayload['product'],
@@ -157,7 +173,7 @@ function resolveRequestId(payload: SupportPayload, options?: SupportIntakeOption
 
 function buildFallbackMessage(payload: SupportPayload) {
   const parts: string[] = [];
-  const existing = (payload.message || '').trim();
+  const existing = toSafeText(payload.message, MAX_MESSAGE_LENGTH);
   if (existing) {
     parts.push(existing);
   } else {
@@ -167,17 +183,16 @@ function buildFallbackMessage(payload: SupportPayload) {
   if (payload.product?.name) {
     const price = Number(payload.product.price || 0);
     const priceLabel = payload.product.sob_consulta ? 'Preço sob consulta' : `Preço atual: R$ ${price.toFixed(2).replace('.', ',')}`;
-    parts.push(`\nProduto: ${payload.product.name}`);
+    parts.push('\nProduto: ' + toSafeText(payload.product.name, 180));
     parts.push(priceLabel);
   }
 
   if (payload.customer?.name) {
-    parts.push(`\nCliente: ${payload.customer.name}`);
+    parts.push('\nCliente: ' + toSafeText(payload.customer.name, 120));
   }
 
-  return parts.join('\n');
+  return parts.join('\n').slice(0, MAX_FALLBACK_MESSAGE_LENGTH);
 }
-
 function buildWhatsappUrl(message: string) {
   return `https://wa.me/${getSupportWhatsappNumber()}?text=${encodeURIComponent(message)}`;
 }
@@ -192,6 +207,15 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
       forwardedToN8n: false,
       n8nStatus: null,
       n8nError: 'N8N_SUPPORT_WEBHOOK_URL não configurado',
+    };
+  }
+
+  if (!isValidHttpUrl(webhookUrl)) {
+    console.error('[support-intake] n8n_webhook_invalid_url; fallback_whatsapp_only', { requestId });
+    return {
+      forwardedToN8n: false,
+      n8nStatus: null,
+      n8nError: 'N8N_SUPPORT_WEBHOOK_URL inválida',
     };
   }
 

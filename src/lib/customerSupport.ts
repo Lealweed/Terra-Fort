@@ -43,6 +43,7 @@ type SupportResponse = {
 
 const DEFAULT_WHATSAPP_NUMBER = '5594999346107';
 const DEFAULT_SUPPORT_REQUEST_TIMEOUT_MS = 15000;
+const DEFAULT_SUPPORT_MESSAGE = 'Olá! Preciso de atendimento da Terra Fort.';
 
 function digitsOnly(value?: string) {
   return (value || '').replace(/\D/g, '');
@@ -63,6 +64,11 @@ export function getSupportWhatsAppNumber() {
 
 export function buildWhatsAppUrl(message: string) {
   return `https://wa.me/${getSupportWhatsAppNumber()}?text=${encodeURIComponent(message)}`;
+}
+
+function normalizeSupportMessage(message?: string) {
+  const normalized = typeof message === 'string' ? message.trim() : '';
+  return normalized || DEFAULT_SUPPORT_MESSAGE;
 }
 
 function resolveSupportRequestTimeoutMs() {
@@ -96,8 +102,23 @@ export function getSupportUserFallbackMessage(result: Pick<SupportResponse, 'ok'
   return 'Não conseguimos iniciar o atendimento automático agora. Vamos abrir o WhatsApp para você continuar.';
 }
 
+
+export function openSupportWhatsapp(url: string, context: SupportPayload['source']) {
+  const safeUrl = typeof url === 'string' ? url.trim() : '';
+  const isWhatsappUrl = /^https:\/\/wa\.me\/[0-9]+\?text=/i.test(safeUrl);
+  const finalUrl = isWhatsappUrl ? safeUrl : buildWhatsAppUrl(DEFAULT_SUPPORT_MESSAGE);
+  const opened = window.open(finalUrl, '_blank', 'noopener,noreferrer');
+
+  if (!opened) {
+    console.warn('[support] popup_blocked_fallback_same_tab', { context, usedFallbackUrl: !isWhatsappUrl });
+    window.location.href = finalUrl;
+  }
+}
+
 export async function submitSupportRequest(payload: SupportPayload): Promise<SupportResponse> {
-  const fallbackUrl = buildWhatsAppUrl(payload.message);
+  const normalizedMessage = normalizeSupportMessage(payload.message);
+  const safePayload = normalizedMessage === payload.message ? payload : { ...payload, message: normalizedMessage };
+  const fallbackUrl = buildWhatsAppUrl(normalizedMessage);
   const timeoutMs = resolveSupportRequestTimeoutMs();
   const controller = new AbortController();
   const abortTimeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -108,7 +129,7 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(safePayload),
       signal: controller.signal,
     });
 
@@ -118,7 +139,7 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
         status: response.status,
         hasWhatsappUrl: !!data?.whatsappUrl,
         n8nError: sanitizeSupportError(data?.error),
-        ...summarizePayload(payload),
+        ...summarizePayload(safePayload),
       });
 
       return {
@@ -143,7 +164,7 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
       isAbort,
       timeoutMs,
       error: sanitizeSupportError(error),
-      ...summarizePayload(payload),
+      ...summarizePayload(safePayload),
     });
 
     return {

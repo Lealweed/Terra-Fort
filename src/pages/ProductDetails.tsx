@@ -6,7 +6,7 @@ import { getProductById } from '../lib/products';
 import { useCart } from '../contexts/CartContext';
 import SafeImage from '../components/SafeImage';
 import { Product } from '../types';
-import { getSupportUserFallbackMessage, submitSupportRequest } from '../lib/customerSupport';
+import { getSupportUserFallbackMessage, openSupportWhatsapp, submitSupportRequest } from '../lib/customerSupport';
 import { buildProductSupportRequest } from '../lib/productSupport';
 
 export default function ProductDetails() {
@@ -82,7 +82,7 @@ export default function ProductDetails() {
       const result = await submitSupportRequest(buildProductSupportRequest(product, 'product_details', quantity));
       const fallbackMessage = getSupportUserFallbackMessage(result);
       if (fallbackMessage) alert(fallbackMessage);
-      window.open(result.whatsappUrl, '_blank');
+      openSupportWhatsapp(result.whatsappUrl, 'product_details');
     } finally {
       setSupportLoading(false);
     }

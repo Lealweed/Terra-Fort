@@ -16,6 +16,36 @@ import { registerAdminUsersRoute } from "./src/server-core/admin-users-route.js"
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
+function sanitizeErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error || 'unknown_error');
+  return raw
+    .replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]')
+    .replace(/(token|secret|key|authorization)=[^\s&]+/gi, '$1=[REDACTED]')
+    .slice(0, 400);
+}
+
+function normalizeSupportBody(rawBody: unknown) {
+  if (!rawBody) return {};
+  if (typeof rawBody === 'string') {
+    try {
+      const parsed = JSON.parse(rawBody);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof rawBody === 'object' && !Array.isArray(rawBody)) {
+    return rawBody;
+  }
+
+  return {};
+}
+
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT || 3000);
@@ -90,12 +120,17 @@ async function startServer() {
     const emergencyUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent("Olá! Preciso de atendimento da Terra Fort.")}`;
 
     try {
-      const result = await handleSupportIntake(req.body || {}, { requestId, origin: "express_server" });
+      const normalizedBody = normalizeSupportBody(req.body);
+      const result = await handleSupportIntake(normalizedBody, { requestId, origin: "express_server" });
       if (result?.body?.requestId) {
         res.setHeader("x-request-id", result.body.requestId);
       }
       return res.status(result.status).json(result.body);
-    } catch {
+    } catch (error: any) {
+      console.error('[support-intake] express_unhandled_error', {
+        requestId: requestId || 'unknown',
+        error: sanitizeErrorMessage(error),
+      });
       if (requestId) {
         res.setHeader("x-request-id", requestId);
       }

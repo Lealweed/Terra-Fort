@@ -16,6 +16,28 @@ function buildEmergencyWhatsappUrl(rawMessage: unknown) {
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 
+
+function normalizeRequestBody(rawBody: unknown) {
+  if (!rawBody) return {};
+  if (typeof rawBody === 'string') {
+    try {
+      const parsed = JSON.parse(rawBody);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof rawBody === 'object' && !Array.isArray(rawBody)) {
+    return rawBody;
+  }
+
+  return {};
+}
+
 function sanitizeErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error || 'unknown_error');
   return raw
@@ -34,24 +56,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     || undefined;
 
   try {
-    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
-      if (requestId) {
-        res.setHeader('x-request-id', requestId);
-      }
+    const normalizedBody = normalizeRequestBody(req.body);
 
-      console.warn('[support-intake] invalid_payload', {
+    if (!Object.keys(normalizedBody).length && req.body && typeof req.body !== 'object') {
+      console.warn('[support-intake] payload_parse_failed_fallback', {
         requestId: requestId || 'unknown',
         method: req?.method || 'unknown',
-      });
-
-      return res.status(400).json({
-        error: 'Dados de atendimento inválidos. Continue pelo WhatsApp.',
-        requestId: requestId || 'unknown',
-        whatsappUrl: buildEmergencyWhatsappUrl(undefined),
+        bodyType: typeof req.body,
       });
     }
 
-    const result = await handleSupportIntake(req.body || {}, { requestId, origin: 'vercel_api' });
+    const result = await handleSupportIntake(normalizedBody, { requestId, origin: 'vercel_api' });
     if (result?.body?.requestId) {
       res.setHeader('x-request-id', result.body.requestId);
     }
