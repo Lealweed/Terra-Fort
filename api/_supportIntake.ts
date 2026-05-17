@@ -79,6 +79,39 @@ function isLikelyConnectionError(error: unknown): boolean {
   );
 }
 
+function isRetryableHttpStatus(status: number): boolean {
+  return status === 429 || (status >= 500 && status <= 599);
+}
+
+function parseRetryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.floor(seconds * 1000);
+  }
+
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    return delta > 0 ? delta : 0;
+  }
+
+  return null;
+}
+
+function computeBackoffMs(baseMs: number, attempt: number, retryAfterMs?: number | null): number {
+  const expBackoff = Math.min(baseMs * Math.pow(2, attempt), 4000);
+  const jitterMs = Math.floor(Math.random() * 200);
+  const candidate = expBackoff + jitterMs;
+
+  if (retryAfterMs != null) {
+    return Math.min(Math.max(retryAfterMs, candidate), 8000);
+  }
+
+  return candidate;
+}
+
 function normalizeRequestId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.replace(/[^a-zA-Z0-9-_.]/g, '').trim();
@@ -348,15 +381,18 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Falha ao chamar webhook n8n');
         const safeErrorText = (errorText || 'Falha ao chamar webhook n8n').slice(0, 500);
-        const canRetry = (response.status >= 500 || response.status === 429) && attempt < retryCount;
+        const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
+        const canRetry = isRetryableHttpStatus(response.status) && attempt < retryCount;
 
         if (canRetry) {
+          const sleepMs = computeBackoffMs(retryBackoffMs, attempt, retryAfterMs);
           console.warn('[support-intake] n8n_forward_retry', {
             requestId,
             attempt: attempt + 1,
             status: response.status,
+            sleepMs,
           });
-          await new Promise((resolve) => setTimeout(resolve, retryBackoffMs));
+          await new Promise((resolve) => setTimeout(resolve, sleepMs));
           continue;
         }
 
@@ -392,15 +428,18 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
     } catch (error: any) {
       const safeError = sanitizeErrorMessage(error);
       const isAbort = error?.name === 'AbortError';
-      const canRetry = attempt < retryCount;
+      const isTransient = isAbort || isLikelyConnectionError(error);
+      const canRetry = isTransient && attempt < retryCount;
 
       if (canRetry) {
+        const sleepMs = computeBackoffMs(retryBackoffMs, attempt);
         console.warn('[support-intake] n8n_forward_retry_exception', {
           requestId,
           attempt: attempt + 1,
+          sleepMs,
           error: safeError,
         });
-        await new Promise((resolve) => setTimeout(resolve, retryBackoffMs));
+        await new Promise((resolve) => setTimeout(resolve, sleepMs));
         continue;
       }
 
@@ -575,8 +614,8 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
 
   const degraded = !n8n.forwardedToN8n || !persistence.persisted;
   const degradedReasons = [
-    !n8n.forwardedToN8n ? 'n8n_unavailable' : null,
-    !persistence.persisted ? 'persistence_failed' : null,
+    !n8n.forwardedToN8n ? (n8n.n8nErrorCode || 'N8N_UNAVAILABLE') : null,
+    !persistence.persisted ? 'PERSISTENCE_FAILED' : null,
   ].filter(Boolean);
   const finalMessage = !n8n.forwardedToN8n
     ? 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.'

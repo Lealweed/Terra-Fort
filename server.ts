@@ -135,10 +135,22 @@ async function startServer() {
         res.setHeader("x-request-id", requestId);
       }
       return res.status(500).json({
-        error: "Falha ao abrir atendimento. Tente novamente em instantes ou continue pelo WhatsApp.",
-        requestId: requestId || "unknown",
+        ok: false,
+        degraded: true,
+        degradedReasons: ['intake_unhandled_exception'],
+        error: 'Falha ao abrir atendimento. Tente novamente em instantes ou continue pelo WhatsApp.',
+        requestId: requestId || 'unknown',
+        forwardedToN8n: false,
+        n8nStatus: null,
+        n8nError: 'Atendimento automático temporariamente indisponível.',
+        n8nErrorCode: 'INTAKE_UNHANDLED_EXCEPTION',
+        persisted: false,
+        ticketId: null,
+        persistenceError: 'Não foi possível registrar o atendimento automaticamente.',
+        persistenceErrorCode: 'PERSISTENCE_FAILED',
         whatsappUrl: emergencyUrl,
-        n8nErrorCode: "SUPPORT_INTAKE_UNHANDLED",
+        fallbackMessage: 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.',
+        finalMessage: 'Falha ao abrir atendimento. Tente novamente em instantes ou continue pelo WhatsApp.',
       });
     }
   });
