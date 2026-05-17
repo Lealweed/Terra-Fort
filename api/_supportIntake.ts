@@ -39,17 +39,66 @@ type SupportPayload = {
 };
 
 const DEFAULT_WHATSAPP_NUMBER = '5594999346107';
+const DEFAULT_N8N_TIMEOUT_MS = 7000;
+const DEFAULT_PERSIST_TIMEOUT_MS = 5000;
 
 function digitsOnly(value?: string) {
   return (value || '').replace(/\D/g, '');
+}
+
+function sanitizeErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error || 'unknown_error');
+  return raw
+    .replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]')
+    .replace(/(token|secret|key|authorization)=[^\s&]+/gi, '$1=[REDACTED]')
+    .slice(0, 500);
 }
 
 function getSupportWhatsappNumber() {
   return digitsOnly(process.env.VITE_SUPPORT_WHATSAPP_NUMBER || process.env.SUPPORT_WHATSAPP_NUMBER || DEFAULT_WHATSAPP_NUMBER) || DEFAULT_WHATSAPP_NUMBER;
 }
 
+function resolveTimeoutMs(rawValue: string | undefined, fallbackMs: number) {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallbackMs;
+  }
+
+  return Math.min(Math.max(Math.floor(parsed), 1000), 20000);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, onTimeout: () => T): Promise<T> {
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(onTimeout());
+      }
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        }
+      })
+      .catch(() => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(onTimeout());
+        }
+      });
+  });
+}
+
 function normalizePayload(input: Req): SupportPayload {
-  const body = input || {};
+  const body = (input && typeof input === 'object' && !Array.isArray(input)) ? input : {};
+
   return {
     source: typeof body.source === 'string' ? body.source : 'site',
     intent: typeof body.intent === 'string' ? body.intent : 'quote_request',
@@ -94,6 +143,7 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
   const webhookToken = process.env.N8N_SUPPORT_WEBHOOK_TOKEN || process.env.N8N_SHARED_SECRET || process.env.AGENT_API_KEY;
 
   if (!webhookUrl) {
+    console.warn('[support-intake] n8n_webhook_missing; fallback_whatsapp_only');
     return {
       forwardedToN8n: false,
       n8nStatus: null,
@@ -108,6 +158,8 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
   if (webhookToken) {
     headers['Authorization'] = `Bearer ${webhookToken}`;
     headers['x-integration-key'] = webhookToken;
+  } else {
+    console.warn('[support-intake] n8n_webhook_token_missing; sending request without auth header');
   }
 
   const requestBody = {
@@ -126,15 +178,24 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
     },
   };
 
+  const timeoutMs = resolveTimeoutMs(process.env.N8N_SUPPORT_TIMEOUT_MS, DEFAULT_N8N_TIMEOUT_MS);
+  const controller = new AbortController();
+  const abortTimeout = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Falha ao chamar webhook n8n');
+      console.error('[support-intake] n8n_forward_failed', {
+        status: response.status,
+        error: sanitizeErrorMessage(errorText),
+      });
       return {
         forwardedToN8n: false,
         n8nStatus: response.status,
@@ -148,11 +209,21 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string) {
       n8nError: null,
     };
   } catch (error: any) {
+    const isAbort = error?.name === 'AbortError';
+
+    console.error('[support-intake] n8n_forward_exception', {
+      error: sanitizeErrorMessage(error),
+    });
+
     return {
       forwardedToN8n: false,
       n8nStatus: null,
-      n8nError: error?.message || 'Falha ao chamar webhook n8n',
+      n8nError: isAbort
+        ? `Timeout ao chamar webhook n8n (${timeoutMs}ms)`
+        : (error?.message || 'Falha ao chamar webhook n8n'),
     };
+  } finally {
+    clearTimeout(abortTimeout);
   }
 }
 
@@ -218,8 +289,35 @@ export async function handleSupportIntake(body: Req) {
   const payload = normalizePayload(body);
   const message = buildFallbackMessage(payload);
   const whatsappUrl = buildWhatsappUrl(message);
-  const persistence = await persistSupportTicket(payload, whatsappUrl);
-  const n8n = await forwardToN8n(payload, whatsappUrl);
+  const persistTimeoutMs = resolveTimeoutMs(process.env.SUPPORT_PERSIST_TIMEOUT_MS, DEFAULT_PERSIST_TIMEOUT_MS);
+
+  const [persistence, n8n] = await Promise.all([
+    withTimeout(
+      persistSupportTicket(payload, whatsappUrl),
+      persistTimeoutMs,
+      () => ({
+        persisted: false,
+        ticketId: null,
+        persistenceError: `Timeout ao persistir ticket (${persistTimeoutMs}ms)`,
+      }),
+    ),
+    forwardToN8n(payload, whatsappUrl),
+  ]);
+
+  if (!persistence.persisted) {
+    console.error('[support-intake] persist_failed', {
+      source: payload.source || 'site',
+      intent: payload.intent || 'quote_request',
+      error: sanitizeErrorMessage(persistence.persistenceError),
+    });
+  }
+
+  if (!n8n.forwardedToN8n) {
+    console.warn('[support-intake] n8n_unavailable; returning_whatsapp_fallback', {
+      n8nStatus: n8n.n8nStatus,
+      hasN8nError: !!n8n.n8nError,
+    });
+  }
 
   return {
     status: 200,
@@ -232,6 +330,9 @@ export async function handleSupportIntake(body: Req) {
       ticketId: persistence.ticketId,
       persistenceError: persistence.persistenceError,
       whatsappUrl,
+      fallbackMessage: !n8n.forwardedToN8n
+        ? 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.'
+        : null,
     },
   };
 }
