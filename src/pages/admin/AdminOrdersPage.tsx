@@ -117,7 +117,7 @@ export default function AdminOrdersPage({
                 <QuickActionButton href={deliverySnapshot.customerPhoneHref} icon={<Phone className="w-4 h-4" />} label="Ligar" tone="green" disabled={!deliverySnapshot.customerPhoneHref} />
                 <QuickActionButton href={deliverySnapshot.mapsUrl} icon={<MapPin className="w-4 h-4" />} label="Rota" tone="blue" disabled={!deliverySnapshot.mapsUrl} />
                 <button onClick={() => setIsReceiptOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-100 text-orange-700 px-3 py-2.5 text-sm font-bold hover:bg-orange-200 transition-colors">
-                  <ReceiptText className="w-4 h-4" /> Recibo
+                  <FileText className="w-4 h-4" /> Recibo
                 </button>
                 <button onClick={onOpenDeliveryTab} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-black px-3 py-2.5 text-sm font-bold text-white hover:bg-gray-800 transition-colors">
                   <Truck className="w-4 h-4" /> Logística

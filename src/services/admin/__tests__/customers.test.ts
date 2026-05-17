@@ -4,8 +4,8 @@ import { buildCreateCustomerPayload, buildCustomerInsights, filterCustomers, toC
 import type { AdminCustomerRow, AdminOrderRow } from '../../../pages/admin/admin-types';
 
 const customers: AdminCustomerRow[] = [
-  { id: 'c1', customer_kind: 'person', name: 'Maria Silva', contact_name: null, email: 'maria@teste.com', phone: '85999990000', document: '123', notes: 'VIP', created_at: '2026-05-01T10:00:00Z' },
-  { id: 'c2', customer_kind: 'company', name: 'Acme LTDA', contact_name: 'João Souza', email: 'joao@teste.com', phone: '85888880000', document: null, notes: null, created_at: '2026-05-02T10:00:00Z' },
+  { id: 'c1', customer_kind: 'person', name: 'Maria Silva', contact_name: null, email: 'maria@teste.com', phone: '85999990000', document: '123', notes: 'VIP', is_blocked: false, created_at: '2026-05-01T10:00:00Z' },
+  { id: 'c2', customer_kind: 'company', name: 'Acme LTDA', contact_name: 'João Souza', email: 'joao@teste.com', phone: '85888880000', document: null, notes: null, is_blocked: false, created_at: '2026-05-02T10:00:00Z' }
 ];
 
 const orders: AdminOrderRow[] = [
@@ -29,6 +29,7 @@ test('toCustomerDraft mantém campos editáveis com strings seguras', () => {
     phone: '85888880000',
     document: '',
     notes: '',
+    is_blocked: false,
   });
 });
 
@@ -40,10 +41,10 @@ test('buildCustomerInsights calcula total, receita e último pedido do cliente',
 });
 
 test('validateCustomerDraft exige nome e ao menos um contato', () => {
-  assert.equal(validateCustomerDraft({ customer_kind: 'person', name: '', contact_name: '', email: '', phone: '', document: '', notes: '' }), 'Nome do cliente é obrigatório.');
-  assert.equal(validateCustomerDraft({ customer_kind: 'person', name: 'Cliente', contact_name: '', email: '', phone: '', document: '', notes: '' }), 'Informe ao menos e-mail ou telefone do cliente.');
-  assert.equal(validateCustomerDraft({ customer_kind: 'company', name: 'Empresa X', contact_name: '', email: 'cliente@teste.com', phone: '', document: '', notes: '' }), 'Informe o nome do contato responsável pela empresa.');
-  assert.equal(validateCustomerDraft({ customer_kind: 'company', name: 'Empresa X', contact_name: 'Paulo', email: 'cliente@teste.com', phone: '', document: '', notes: '' }), null);
+  assert.equal(validateCustomerDraft({ customer_kind: 'person', name: '', contact_name: '', email: '', phone: '', document: '', notes: '', is_blocked: false }), 'Nome do cliente é obrigatório.');
+  assert.equal(validateCustomerDraft({ customer_kind: 'person', name: 'Cliente', contact_name: '', email: '', phone: '', document: '', notes: '', is_blocked: false }), 'Informe ao menos e-mail ou telefone do cliente.');
+  assert.equal(validateCustomerDraft({ customer_kind: 'company', name: 'Empresa X', contact_name: '', email: 'cliente@teste.com', phone: '', document: '', notes: '', is_blocked: false }), 'Informe o nome do contato responsável pela empresa.');
+  assert.equal(validateCustomerDraft({ customer_kind: 'company', name: 'Empresa X', contact_name: 'Paulo', email: 'cliente@teste.com', phone: '', document: '', notes: '', is_blocked: false }), null);
 });
 
 test('buildCreateCustomerPayload normaliza strings e converte vazios para null', () => {
@@ -56,6 +57,7 @@ test('buildCreateCustomerPayload normaliza strings e converte vazios para null',
       phone: ' 94999990000 ',
       document: '',
       notes: ' observação ',
+      is_blocked: false,
     }),
     {
       customer_kind: 'company',
@@ -65,6 +67,7 @@ test('buildCreateCustomerPayload normaliza strings e converte vazios para null',
       phone: '94999990000',
       document: null,
       notes: 'observação',
+      is_blocked: false,
     },
   );
 });

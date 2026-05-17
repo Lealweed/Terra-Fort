@@ -78,7 +78,11 @@ export default function AdminCustomersPage({
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-sm text-gray-900">{customer.name}</p>
-                      {customer.is_blocked && <ShieldBan className="w-3.5 h-3.5 text-red-500" title="Cliente bloqueado" />}
+                      {customer.is_blocked && (
+                        <span title="Cliente bloqueado" aria-label="Cliente bloqueado">
+                          <ShieldBan className="w-3.5 h-3.5 text-red-500" />
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-500 mt-1">{customer.contact_name || customer.email || '-'} • {customer.phone || '-'}</p>
                   </div>
