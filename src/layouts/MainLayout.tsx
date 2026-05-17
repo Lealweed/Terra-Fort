@@ -45,7 +45,7 @@ export default function MainLayout() {
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-lg">Endereço</h4>
-                  <p className="text-sm">Av. Principal, Parauapebas - PA</p>
+                  <p className="text-sm">R. Café Filho, 10/11 - Altamira, Parauapebas - PA, 68515-000</p>
                 </div>
               </div>
               

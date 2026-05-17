@@ -37,7 +37,7 @@ export default function AdminOrderReceipt({ order, orderItems, onClose }: Props)
             <p className="text-sm text-gray-500 mt-1 font-medium">A maior variedade de materiais para sua obra.</p>
             <div className="mt-4 border-t border-b border-dashed border-gray-200 py-3 text-sm text-gray-600">
               <p>CNPJ: 00.000.000/0000-00</p>
-              <p>Parauapebas, PA</p>
+              <p>R. Café Filho, 10/11 - Altamira, Parauapebas - PA, 68515-000</p>
             </div>
           </div>
 
