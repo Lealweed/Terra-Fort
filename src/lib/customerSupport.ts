@@ -42,6 +42,7 @@ type SupportResponse = {
 };
 
 const DEFAULT_WHATSAPP_NUMBER = '5594999346107';
+const DEFAULT_SUPPORT_REQUEST_TIMEOUT_MS = 15000;
 
 function digitsOnly(value?: string) {
   return (value || '').replace(/\D/g, '');
@@ -51,8 +52,12 @@ export function resolveSupportWhatsAppNumber(configuredNumber?: string | null) {
   return digitsOnly(configuredNumber || undefined) || digitsOnly(DEFAULT_WHATSAPP_NUMBER) || DEFAULT_WHATSAPP_NUMBER;
 }
 
+function getViteEnv() {
+  return (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+}
+
 export function getSupportWhatsAppNumber() {
-  const viteEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  const viteEnv = getViteEnv();
   return resolveSupportWhatsAppNumber(viteEnv?.VITE_SUPPORT_WHATSAPP_NUMBER);
 }
 
@@ -60,8 +65,21 @@ export function buildWhatsAppUrl(message: string) {
   return `https://wa.me/${getSupportWhatsAppNumber()}?text=${encodeURIComponent(message)}`;
 }
 
+function resolveSupportRequestTimeoutMs() {
+  const viteEnv = getViteEnv();
+  const parsed = Number(viteEnv?.VITE_SUPPORT_REQUEST_TIMEOUT_MS);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_SUPPORT_REQUEST_TIMEOUT_MS;
+  }
+
+  return Math.min(Math.max(Math.floor(parsed), 3000), 30000);
+}
+
 export async function submitSupportRequest(payload: SupportPayload): Promise<SupportResponse> {
   const fallbackUrl = buildWhatsAppUrl(payload.message);
+  const timeoutMs = resolveSupportRequestTimeoutMs();
+  const controller = new AbortController();
+  const abortTimeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch('/api/support-intake', {
@@ -70,6 +88,7 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
 
     const data = await response.json().catch(() => null);
@@ -90,13 +109,18 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
       n8nStatus: typeof data.n8nStatus === 'number' ? data.n8nStatus : null,
       n8nError: typeof data.n8nError === 'string' ? data.n8nError : null,
     };
-  } catch {
+  } catch (error: any) {
+    const isAbort = error?.name === 'AbortError';
     return {
       ok: false,
       forwardedToN8n: false,
       whatsappUrl: fallbackUrl,
       n8nStatus: null,
-      n8nError: 'Falha de rede ao iniciar atendimento',
+      n8nError: isAbort
+        ? `Tempo de resposta excedido ao iniciar atendimento (${timeoutMs}ms)`
+        : 'Falha de rede ao iniciar atendimento',
     };
+  } finally {
+    clearTimeout(abortTimeout);
   }
 }

@@ -82,11 +82,29 @@ async function startServer() {
   });
 
   app.post("/api/support-intake", async (req, res) => {
+    const requestId = (typeof req?.headers?.["x-request-id"] === "string" && req.headers["x-request-id"].trim())
+      || (typeof req?.headers?.["x-correlation-id"] === "string" && req.headers["x-correlation-id"].trim())
+      || undefined;
+
+    const whatsappNumber = String(process.env.VITE_SUPPORT_WHATSAPP_NUMBER || process.env.SUPPORT_WHATSAPP_NUMBER || "5594999346107").replace(/\D/g, "") || "5594999346107";
+    const emergencyUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent("Olá! Preciso de atendimento da Terra Fort.")}`;
+
     try {
-      const result = await handleSupportIntake(req.body || {});
+      const result = await handleSupportIntake(req.body || {}, { requestId, origin: "express_server" });
+      if (result?.body?.requestId) {
+        res.setHeader("x-request-id", result.body.requestId);
+      }
       return res.status(result.status).json(result.body);
-    } catch (error: any) {
-      return res.status(500).json({ error: error.message || "Failed to create support intake" });
+    } catch {
+      if (requestId) {
+        res.setHeader("x-request-id", requestId);
+      }
+      return res.status(500).json({
+        error: "Falha ao abrir atendimento. Tente novamente em instantes ou continue pelo WhatsApp.",
+        requestId: requestId || "unknown",
+        whatsappUrl: emergencyUrl,
+        n8nErrorCode: "SUPPORT_INTAKE_UNHANDLED",
+      });
     }
   });
 
