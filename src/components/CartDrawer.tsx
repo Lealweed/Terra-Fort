@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { getSupportUserFallbackMessage, openSupportWhatsapp, submitSupportRequest } from '../lib/customerSupport';
+import { buildWhatsAppUrl, getSupportUserFallbackMessage, openSupportWhatsapp, submitSupportRequest } from '../lib/customerSupport';
 import { getStripeCheckoutAvailability, getStripeCheckoutErrorMessage } from '../lib/cartCheckout';
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY?.trim();
@@ -82,9 +82,9 @@ export default function CartDrawer() {
     }
 
     const message = generateWhatsAppMessage();
-    const result = await submitSupportRequest({
-      source: 'cart_checkout',
-      intent: 'quote_request',
+    const supportPayload = {
+      source: 'cart_checkout' as const,
+      intent: 'quote_request' as const,
       message,
       customer: {
         name: formData.name,
@@ -108,11 +108,22 @@ export default function CartDrawer() {
       metadata: {
         channel: 'site_cart',
       },
-    });
+    };
 
-    const fallbackMessage = getSupportUserFallbackMessage(result);
-    if (fallbackMessage) alert(fallbackMessage);
-    openSupportWhatsapp(result.whatsappUrl, 'cart_checkout');
+    try {
+      const result = await submitSupportRequest(supportPayload);
+      const fallbackMessage = getSupportUserFallbackMessage(result);
+      if (fallbackMessage) alert(fallbackMessage);
+      openSupportWhatsapp(result.whatsappUrl, 'cart_checkout');
+    } catch (error) {
+      console.error('[support] cart_checkout_unexpected_error_fallback_whatsapp', {
+        cartItemsCount: validCartItems.length,
+        hasSobConsulta,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      alert('Não conseguimos iniciar o atendimento agora. Vamos abrir o WhatsApp para você continuar.');
+      openSupportWhatsapp(buildWhatsAppUrl(supportPayload.message), 'cart_checkout');
+    }
   };
 
   const handleStripeCheckout = async () => {

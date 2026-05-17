@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import SafeImage from './SafeImage';
-import { getSupportUserFallbackMessage, openSupportWhatsapp, submitSupportRequest } from '../lib/customerSupport';
+import { buildWhatsAppUrl, getSupportUserFallbackMessage, openSupportWhatsapp, submitSupportRequest } from '../lib/customerSupport';
 import { buildProductSupportRequest } from '../lib/productSupport';
 
 interface ProductCardProps {
@@ -39,11 +39,19 @@ export default function ProductCard({ product }: ProductCardProps) {
     e.stopPropagation();
     setSupportLoading(true);
 
+    const supportPayload = buildProductSupportRequest(product, 'product_card');
     try {
-      const result = await submitSupportRequest(buildProductSupportRequest(product, 'product_card'));
+      const result = await submitSupportRequest(supportPayload);
       const fallbackMessage = getSupportUserFallbackMessage(result);
       if (fallbackMessage) alert(fallbackMessage);
       openSupportWhatsapp(result.whatsappUrl, 'product_card');
+    } catch (error) {
+      console.error('[support] product_card_unexpected_error_fallback_whatsapp', {
+        productId: product.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      alert('Não conseguimos iniciar o atendimento agora. Vamos abrir o WhatsApp para você continuar.');
+      openSupportWhatsapp(buildWhatsAppUrl(supportPayload.message), 'product_card');
     } finally {
       setSupportLoading(false);
     }

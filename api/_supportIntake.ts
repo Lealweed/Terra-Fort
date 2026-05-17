@@ -66,6 +66,12 @@ function sanitizeErrorMessage(error: unknown): string {
     .slice(0, 500);
 }
 
+function normalizeRequestId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/[^a-zA-Z0-9-_.]/g, '').trim();
+  return normalized ? normalized.slice(0, 120) : null;
+}
+
 function getSupportWhatsappNumber() {
   return digitsOnly(process.env.VITE_SUPPORT_WHATSAPP_NUMBER || process.env.SUPPORT_WHATSAPP_NUMBER || DEFAULT_WHATSAPP_NUMBER) || DEFAULT_WHATSAPP_NUMBER;
 }
@@ -215,8 +221,8 @@ function sanitizePayloadForVolume(payload: SupportPayload): { payload: SupportPa
 }
 
 function resolveRequestId(payload: SupportPayload, options?: SupportIntakeOptions) {
-  const metadataRequestId = typeof payload.metadata?.requestId === 'string' ? payload.metadata.requestId.trim() : '';
-  const optionRequestId = typeof options?.requestId === 'string' ? options.requestId.trim() : '';
+  const metadataRequestId = normalizeRequestId(payload.metadata?.requestId);
+  const optionRequestId = normalizeRequestId(options?.requestId);
   return metadataRequestId || optionRequestId || randomUUID();
 }
 
@@ -252,7 +258,7 @@ function buildWhatsappUrl(message: string) {
 }
 
 async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, requestId: string) {
-  const webhookUrl = process.env.N8N_SUPPORT_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL;
+  const webhookUrl = (process.env.N8N_SUPPORT_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL || '').trim();
   const webhookToken = process.env.N8N_SUPPORT_WEBHOOK_TOKEN || process.env.N8N_SHARED_SECRET || process.env.AGENT_API_KEY;
 
   if (!webhookUrl) {
@@ -261,6 +267,7 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
       forwardedToN8n: false,
       n8nStatus: null,
       n8nError: 'N8N_SUPPORT_WEBHOOK_URL não configurado',
+      n8nErrorCode: 'N8N_WEBHOOK_MISSING',
     };
   }
 
@@ -270,6 +277,7 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
       forwardedToN8n: false,
       n8nStatus: null,
       n8nError: 'N8N_SUPPORT_WEBHOOK_URL inválida',
+      n8nErrorCode: 'N8N_WEBHOOK_INVALID_URL',
     };
   }
 
@@ -349,6 +357,7 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
           forwardedToN8n: false,
           n8nStatus: response.status,
           n8nError: safeErrorText,
+          n8nErrorCode: `N8N_HTTP_${response.status}`,
         };
       }
 
@@ -365,6 +374,7 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
         forwardedToN8n: true,
         n8nStatus: response.status,
         n8nError: null,
+        n8nErrorCode: null,
       };
     } catch (error: any) {
       const safeError = sanitizeErrorMessage(error);
@@ -393,6 +403,7 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
         n8nError: isAbort
           ? `Timeout ao chamar webhook n8n (${timeoutMs}ms)`
           : (safeError || 'Falha ao chamar webhook n8n'),
+        n8nErrorCode: isAbort ? 'N8N_TIMEOUT' : 'N8N_REQUEST_EXCEPTION',
       };
     } finally {
       clearTimeout(abortTimeout);
@@ -403,6 +414,7 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
     forwardedToN8n: false,
     n8nStatus: null,
     n8nError: 'Falha ao chamar webhook n8n',
+    n8nErrorCode: 'N8N_REQUEST_FAILED',
   };
 }
 
@@ -523,6 +535,7 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
           forwardedToN8n: false,
           n8nStatus: null,
           n8nError: `Timeout geral no intake (${totalTimeoutMs}ms)`,
+          n8nErrorCode: 'SUPPORT_INTAKE_TOTAL_TIMEOUT',
         },
       ] as const;
     },
@@ -576,7 +589,7 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
       forwardedToN8n: n8n.forwardedToN8n,
       n8nStatus: n8n.n8nStatus,
       n8nError: !n8n.forwardedToN8n ? 'Atendimento automático temporariamente indisponível.' : null,
-      n8nErrorCode: !n8n.forwardedToN8n ? 'N8N_UNAVAILABLE' : null,
+      n8nErrorCode: !n8n.forwardedToN8n ? (n8n.n8nErrorCode || 'N8N_UNAVAILABLE') : null,
       persisted: persistence.persisted,
       ticketId: persistence.ticketId,
       persistenceError: !persistence.persisted ? 'Não foi possível registrar o atendimento automaticamente.' : null,

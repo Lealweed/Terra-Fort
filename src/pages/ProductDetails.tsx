@@ -6,7 +6,7 @@ import { getProductById } from '../lib/products';
 import { useCart } from '../contexts/CartContext';
 import SafeImage from '../components/SafeImage';
 import { Product } from '../types';
-import { getSupportUserFallbackMessage, openSupportWhatsapp, submitSupportRequest } from '../lib/customerSupport';
+import { buildWhatsAppUrl, getSupportUserFallbackMessage, openSupportWhatsapp, submitSupportRequest } from '../lib/customerSupport';
 import { buildProductSupportRequest } from '../lib/productSupport';
 
 export default function ProductDetails() {
@@ -78,11 +78,20 @@ export default function ProductDetails() {
   const handleTalkToSupport = async () => {
     setSupportLoading(true);
 
+    const supportPayload = buildProductSupportRequest(product, 'product_details', quantity);
     try {
-      const result = await submitSupportRequest(buildProductSupportRequest(product, 'product_details', quantity));
+      const result = await submitSupportRequest(supportPayload);
       const fallbackMessage = getSupportUserFallbackMessage(result);
       if (fallbackMessage) alert(fallbackMessage);
       openSupportWhatsapp(result.whatsappUrl, 'product_details');
+    } catch (error) {
+      console.error('[support] product_details_unexpected_error_fallback_whatsapp', {
+        productId: product.id,
+        quantity,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      alert('Não conseguimos iniciar o atendimento agora. Vamos abrir o WhatsApp para você continuar.');
+      openSupportWhatsapp(buildWhatsAppUrl(supportPayload.message), 'product_details');
     } finally {
       setSupportLoading(false);
     }
