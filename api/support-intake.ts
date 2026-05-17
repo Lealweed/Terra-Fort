@@ -46,14 +46,29 @@ function sanitizeErrorMessage(error: unknown): string {
     .slice(0, 400);
 }
 
+
+function buildSafeRequestId(value: unknown) {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.replace(/[^a-zA-Z0-9-_.]/g, '').trim();
+  return normalized ? normalized.slice(0, 120) : undefined;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  const requestId = buildSafeRequestId(req?.headers?.['x-request-id'])
+    || buildSafeRequestId(req?.headers?.['x-correlation-id']);
+
+  if (requestId) {
+    res.setHeader('x-request-id', requestId);
   }
 
-  const requestId = (typeof req?.headers?.['x-request-id'] === 'string' && req.headers['x-request-id'].trim())
-    || (typeof req?.headers?.['x-correlation-id'] === 'string' && req.headers['x-correlation-id'].trim())
-    || undefined;
+  if (req.method !== 'POST') {
+    console.warn('[support-intake] method_not_allowed', {
+      requestId: requestId || 'unknown',
+      method: req?.method || 'unknown',
+    });
+    return res.status(405).json({ error: 'Method not allowed', requestId: requestId || 'unknown' });
+  }
+
 
   try {
     const normalizedBody = normalizeRequestBody(req.body);
@@ -75,6 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (requestId) {
       res.setHeader('x-request-id', requestId);
     }
+    const normalizedBodyForError = normalizeRequestBody(req?.body);
     console.error('[support-intake] unhandled_error', {
       requestId: requestId || 'unknown',
       method: req?.method || 'unknown',
@@ -83,9 +99,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     return res.status(500).json({
+      ok: false,
+      degraded: true,
+      degradedReasons: ['intake_unhandled_exception'],
       error: 'Falha ao abrir atendimento. Tente novamente em instantes ou continue pelo WhatsApp.',
       requestId: requestId || 'unknown',
-      whatsappUrl: buildEmergencyWhatsappUrl(req?.body?.message),
+      whatsappUrl: buildEmergencyWhatsappUrl((normalizedBodyForError as any)?.message),
+      fallbackMessage: 'Atendimento automático indisponível no momento. Continue pelo WhatsApp.',
+      n8nErrorCode: 'INTAKE_UNHANDLED_EXCEPTION',
     });
   }
 }

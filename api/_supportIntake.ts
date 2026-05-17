@@ -85,6 +85,49 @@ function toSafeText(value: unknown, maxLength: number) {
   return value.replace(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
+
+function toSafeNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return parsed;
+}
+
+function normalizeCustomer(customer: SupportPayload['customer']) {
+  if (!customer || typeof customer !== 'object') return undefined;
+  return {
+    name: toSafeText(customer.name, 120),
+    phone: toSafeText(customer.phone, 40),
+    email: toSafeText(customer.email, 160),
+    address: toSafeText(customer.address, 200),
+    city: toSafeText(customer.city, 120),
+    neighborhood: toSafeText(customer.neighborhood, 120),
+    cep: toSafeText(customer.cep, 20),
+  };
+}
+
+function normalizeItems(items: SupportPayload['items']) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((item) => item && typeof item === 'object' && !Array.isArray(item))
+    .map((item) => ({
+      id: toSafeText(item.id, 80),
+      name: toSafeText(item.name, 180),
+      quantity: Math.max(0, Math.floor(toSafeNumber(item.quantity, 0))),
+      unitPrice: toSafeNumber(item.unitPrice, 0),
+      sobConsulta: !!item.sobConsulta,
+    }));
+}
+
+function summarizePayload(payload: SupportPayload) {
+  return {
+    source: payload.source || 'site',
+    intent: payload.intent || 'quote_request',
+    hasMessage: !!toSafeText(payload.message, 40),
+    hasCustomer: !!payload.customer,
+    itemsCount: Array.isArray(payload.items) ? payload.items.length : 0,
+  };
+}
+
 function isValidHttpUrl(rawUrl: string) {
   try {
     const parsed = new URL(rawUrl);
@@ -126,17 +169,23 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, onTimeout: () =>
 function normalizePayload(input: Req): SupportPayload {
   const body = (input && typeof input === 'object' && !Array.isArray(input)) ? input : {};
   const asRecord = (value: unknown) => (value && typeof value === 'object' && !Array.isArray(value)) ? value : undefined;
-  const normalizedItems = Array.isArray(body.items)
-    ? body.items.filter((item) => item && typeof item === 'object' && !Array.isArray(item))
-    : [];
+  const product = asRecord(body.product) as SupportPayload['product'];
 
   return {
     source: toSafeText(body.source, 80) || 'site',
     intent: toSafeText(body.intent, 80) || 'quote_request',
     message: typeof body.message === 'string' ? body.message : '',
-    customer: asRecord(body.customer) as SupportPayload['customer'],
-    product: asRecord(body.product) as SupportPayload['product'],
-    items: normalizedItems as SupportPayload['items'],
+    customer: normalizeCustomer(asRecord(body.customer) as SupportPayload['customer']),
+    product: product ? {
+      id: toSafeText(product.id, 80),
+      name: toSafeText(product.name, 180),
+      category: toSafeText(product.category, 80),
+      price: toSafeNumber(product.price, 0),
+      original_price: toSafeNumber(product.original_price, 0),
+      sob_consulta: !!product.sob_consulta,
+      stock_level: Math.floor(toSafeNumber(product.stock_level, 0)),
+    } : undefined,
+    items: normalizeItems(body.items as SupportPayload['items']),
     totals: asRecord(body.totals) as SupportPayload['totals'],
     metadata: asRecord(body.metadata) as SupportPayload['metadata'],
   };
@@ -181,8 +230,13 @@ function buildFallbackMessage(payload: SupportPayload) {
   }
 
   if (payload.product?.name) {
-    const price = Number(payload.product.price || 0);
-    const priceLabel = payload.product.sob_consulta ? 'Preço sob consulta' : `Preço atual: R$ ${price.toFixed(2).replace('.', ',')}`;
+    const rawPrice = Number(payload.product.price);
+    const hasValidPrice = Number.isFinite(rawPrice) && rawPrice >= 0;
+    const priceLabel = payload.product.sob_consulta
+      ? 'Preço sob consulta'
+      : hasValidPrice
+        ? `Preço atual: R$ ${rawPrice.toFixed(2).replace('.', ',')}`
+        : 'Preço sujeito a confirmação';
     parts.push('\nProduto: ' + toSafeText(payload.product.name, 180));
     parts.push(priceLabel);
   }
@@ -433,6 +487,12 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
 
   const totalTimeoutMs = resolveTimeoutMs(process.env.SUPPORT_INTAKE_TOTAL_TIMEOUT_MS, DEFAULT_TOTAL_TIMEOUT_MS);
 
+  console.info('[support-intake] received', {
+    requestId,
+    origin: options?.origin || 'unknown',
+    ...summarizePayload(payload),
+  });
+
   const [persistence, n8n] = await withTimeout(
     Promise.all([
       withTimeout(
@@ -511,6 +571,7 @@ export async function handleSupportIntake(body: Req, options?: SupportIntakeOpti
     body: {
       ok: true,
       degraded,
+      degradedReasons,
       requestId,
       forwardedToN8n: n8n.forwardedToN8n,
       n8nStatus: n8n.n8nStatus,

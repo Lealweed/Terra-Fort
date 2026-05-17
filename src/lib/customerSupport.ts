@@ -39,6 +39,7 @@ type SupportResponse = {
   whatsappUrl: string;
   n8nStatus?: number | null;
   n8nError?: string | null;
+  requestId?: string | null;
 };
 
 const DEFAULT_WHATSAPP_NUMBER = '5594999346107';
@@ -97,6 +98,28 @@ function summarizePayload(payload: SupportPayload) {
   };
 }
 
+
+function sanitizeRequestId(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/[^a-zA-Z0-9-_.]/g, '').trim();
+  return normalized ? normalized.slice(0, 120) : null;
+}
+
+function normalizeSupportPayload(payload: SupportPayload): SupportPayload {
+  const source = typeof payload.source === 'string' && payload.source.trim()
+    ? payload.source
+    : 'product_card';
+  const intent = typeof payload.intent === 'string' && payload.intent.trim()
+    ? payload.intent
+    : 'quote_request';
+
+  return {
+    ...payload,
+    source: source as SupportPayload['source'],
+    intent: intent as SupportPayload['intent'],
+  };
+}
+
 export function getSupportUserFallbackMessage(result: Pick<SupportResponse, 'ok' | 'n8nError'>) {
   if (result.ok) return null;
   return 'Não conseguimos iniciar o atendimento automático agora. Vamos abrir o WhatsApp para você continuar.';
@@ -104,6 +127,10 @@ export function getSupportUserFallbackMessage(result: Pick<SupportResponse, 'ok'
 
 
 export function openSupportWhatsapp(url: string, context: SupportPayload['source']) {
+  if (typeof window === 'undefined') {
+    console.warn('[support] window_unavailable_skip_open', { context });
+    return;
+  }
   const safeUrl = typeof url === 'string' ? url.trim() : '';
   const isWhatsappUrl = /^https:\/\/wa\.me\/[0-9]+\?text=/i.test(safeUrl);
   const finalUrl = isWhatsappUrl ? safeUrl : buildWhatsAppUrl(DEFAULT_SUPPORT_MESSAGE);
@@ -117,7 +144,10 @@ export function openSupportWhatsapp(url: string, context: SupportPayload['source
 
 export async function submitSupportRequest(payload: SupportPayload): Promise<SupportResponse> {
   const normalizedMessage = normalizeSupportMessage(payload.message);
-  const safePayload = normalizedMessage === payload.message ? payload : { ...payload, message: normalizedMessage };
+  const normalizedPayload = normalizeSupportPayload(payload);
+  const safePayload = normalizedMessage === normalizedPayload.message
+    ? normalizedPayload
+    : { ...normalizedPayload, message: normalizedMessage };
   const fallbackUrl = buildWhatsAppUrl(normalizedMessage);
   const timeoutMs = resolveSupportRequestTimeoutMs();
   const controller = new AbortController();
@@ -133,6 +163,7 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
       signal: controller.signal,
     });
 
+    const requestId = sanitizeRequestId(response.headers.get('x-request-id'));
     const data = await response.json().catch(() => null);
     if (!response.ok || !data?.whatsappUrl) {
       console.warn('[support] fallback to whatsapp after support-intake failure', {
@@ -148,16 +179,29 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
         whatsappUrl: fallbackUrl,
         n8nStatus: response.status,
         n8nError: data?.error || 'Falha ao iniciar atendimento',
+        requestId,
       };
     }
 
-    return {
+    const safeResult = {
       ok: true,
       forwardedToN8n: !!data.forwardedToN8n,
       whatsappUrl: typeof data.whatsappUrl === 'string' ? data.whatsappUrl : fallbackUrl,
       n8nStatus: typeof data.n8nStatus === 'number' ? data.n8nStatus : null,
       n8nError: typeof data.n8nError === 'string' ? data.n8nError : null,
+      requestId: sanitizeRequestId(data?.requestId) || requestId,
     };
+
+    if (!safeResult.forwardedToN8n) {
+      console.warn('[support] api_degraded_fallback_available', {
+        requestId: safeResult.requestId || 'unknown',
+        n8nStatus: safeResult.n8nStatus,
+        hasN8nError: !!safeResult.n8nError,
+        ...summarizePayload(safePayload),
+      });
+    }
+
+    return safeResult;
   } catch (error: any) {
     const isAbort = error?.name === 'AbortError';
     console.warn('[support] fallback to whatsapp after network/timeout error', {
@@ -175,6 +219,7 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
       n8nError: isAbort
         ? `Tempo de resposta excedido ao iniciar atendimento (${timeoutMs}ms)`
         : 'Falha de rede ao iniciar atendimento',
+      requestId: null,
     };
   } finally {
     clearTimeout(abortTimeout);
