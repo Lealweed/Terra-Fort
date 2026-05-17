@@ -75,6 +75,27 @@ function resolveSupportRequestTimeoutMs() {
   return Math.min(Math.max(Math.floor(parsed), 3000), 30000);
 }
 
+function sanitizeSupportError(error: unknown) {
+  if (!error) return null;
+  const raw = error instanceof Error ? error.message : String(error);
+  const normalized = raw.replace(/\s+/g, ' ').trim();
+  return normalized ? normalized.slice(0, 240) : null;
+}
+
+function summarizePayload(payload: SupportPayload) {
+  return {
+    source: payload.source,
+    intent: payload.intent,
+    hasCustomer: !!payload.customer,
+    itemsCount: Array.isArray(payload.items) ? payload.items.length : 0,
+  };
+}
+
+export function getSupportUserFallbackMessage(result: Pick<SupportResponse, 'ok' | 'n8nError'>) {
+  if (result.ok) return null;
+  return 'Não conseguimos iniciar o atendimento automático agora. Vamos abrir o WhatsApp para você continuar.';
+}
+
 export async function submitSupportRequest(payload: SupportPayload): Promise<SupportResponse> {
   const fallbackUrl = buildWhatsAppUrl(payload.message);
   const timeoutMs = resolveSupportRequestTimeoutMs();
@@ -93,6 +114,13 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
 
     const data = await response.json().catch(() => null);
     if (!response.ok || !data?.whatsappUrl) {
+      console.warn('[support] fallback to whatsapp after support-intake failure', {
+        status: response.status,
+        hasWhatsappUrl: !!data?.whatsappUrl,
+        n8nError: sanitizeSupportError(data?.error),
+        ...summarizePayload(payload),
+      });
+
       return {
         ok: false,
         forwardedToN8n: false,
@@ -111,6 +139,13 @@ export async function submitSupportRequest(payload: SupportPayload): Promise<Sup
     };
   } catch (error: any) {
     const isAbort = error?.name === 'AbortError';
+    console.warn('[support] fallback to whatsapp after network/timeout error', {
+      isAbort,
+      timeoutMs,
+      error: sanitizeSupportError(error),
+      ...summarizePayload(payload),
+    });
+
     return {
       ok: false,
       forwardedToN8n: false,

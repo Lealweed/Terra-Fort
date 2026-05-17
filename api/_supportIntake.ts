@@ -41,6 +41,8 @@ type SupportPayload = {
 
 const DEFAULT_WHATSAPP_NUMBER = '5594999346107';
 const DEFAULT_N8N_TIMEOUT_MS = 7000;
+const DEFAULT_N8N_RETRY_COUNT = 1;
+const DEFAULT_N8N_RETRY_BACKOFF_MS = 250;
 const DEFAULT_PERSIST_TIMEOUT_MS = 5000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 12000;
 const MAX_MESSAGE_LENGTH = 2000;
@@ -223,65 +225,107 @@ async function forwardToN8n(payload: SupportPayload, whatsappUrl: string, reques
   };
 
   const timeoutMs = resolveTimeoutMs(process.env.N8N_SUPPORT_TIMEOUT_MS, DEFAULT_N8N_TIMEOUT_MS);
-  const controller = new AbortController();
-  const abortTimeout = setTimeout(() => controller.abort(), timeoutMs);
+  const retryCountRaw = Number(process.env.N8N_SUPPORT_RETRY_COUNT);
+  const retryCount = Number.isFinite(retryCountRaw)
+    ? Math.min(Math.max(Math.floor(retryCountRaw), 0), 2)
+    : DEFAULT_N8N_RETRY_COUNT;
+  const retryBackoffRaw = Number(process.env.N8N_SUPPORT_RETRY_BACKOFF_MS);
+  const retryBackoffMs = Number.isFinite(retryBackoffRaw)
+    ? Math.min(Math.max(Math.floor(retryBackoffRaw), 0), 2000)
+    : DEFAULT_N8N_RETRY_BACKOFF_MS;
 
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
+  for (let attempt = 0; attempt <= retryCount; attempt += 1) {
+    const controller = new AbortController();
+    const abortTimeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Falha ao chamar webhook n8n');
-      const safeErrorText = (errorText || 'Falha ao chamar webhook n8n').slice(0, 500);
-      console.error('[support-intake] n8n_forward_failed', {
-        requestId,
-        status: response.status,
-        error: sanitizeErrorMessage(safeErrorText),
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
       });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Falha ao chamar webhook n8n');
+        const safeErrorText = (errorText || 'Falha ao chamar webhook n8n').slice(0, 500);
+        const canRetry = (response.status >= 500 || response.status === 429) && attempt < retryCount;
+
+        if (canRetry) {
+          console.warn('[support-intake] n8n_forward_retry', {
+            requestId,
+            attempt: attempt + 1,
+            status: response.status,
+          });
+          await new Promise((resolve) => setTimeout(resolve, retryBackoffMs));
+          continue;
+        }
+
+        console.error('[support-intake] n8n_forward_failed', {
+          requestId,
+          status: response.status,
+          error: sanitizeErrorMessage(safeErrorText),
+          attempt: attempt + 1,
+        });
+        return {
+          forwardedToN8n: false,
+          n8nStatus: response.status,
+          n8nError: safeErrorText,
+        };
+      }
+
+      // Alguns webhooks retornam 204/200 sem body; isso é aceitável para intake.
+      const responseText = await response.text().catch(() => '');
+      if (!responseText.trim()) {
+        console.warn('[support-intake] n8n_forward_empty_response', {
+          requestId,
+          status: response.status,
+        });
+      }
+
+      return {
+        forwardedToN8n: true,
+        n8nStatus: response.status,
+        n8nError: null,
+      };
+    } catch (error: any) {
+      const safeError = sanitizeErrorMessage(error);
+      const isAbort = error?.name === 'AbortError';
+      const canRetry = attempt < retryCount;
+
+      if (canRetry) {
+        console.warn('[support-intake] n8n_forward_retry_exception', {
+          requestId,
+          attempt: attempt + 1,
+          error: safeError,
+        });
+        await new Promise((resolve) => setTimeout(resolve, retryBackoffMs));
+        continue;
+      }
+
+      console.error('[support-intake] n8n_forward_exception', {
+        requestId,
+        error: safeError,
+        attempt: attempt + 1,
+      });
+
       return {
         forwardedToN8n: false,
-        n8nStatus: response.status,
-        n8nError: safeErrorText,
+        n8nStatus: null,
+        n8nError: isAbort
+          ? `Timeout ao chamar webhook n8n (${timeoutMs}ms)`
+          : (safeError || 'Falha ao chamar webhook n8n'),
       };
+    } finally {
+      clearTimeout(abortTimeout);
     }
-
-    // Alguns webhooks retornam 204/200 sem body; isso é aceitável para intake.
-    const responseText = await response.text().catch(() => '');
-    if (!responseText.trim()) {
-      console.warn('[support-intake] n8n_forward_empty_response', {
-        requestId,
-        status: response.status,
-      });
-    }
-
-    return {
-      forwardedToN8n: true,
-      n8nStatus: response.status,
-      n8nError: null,
-    };
-  } catch (error: any) {
-    const safeError = sanitizeErrorMessage(error);
-    const isAbort = error?.name === 'AbortError';
-
-    console.error('[support-intake] n8n_forward_exception', {
-      requestId,
-      error: safeError,
-    });
-
-    return {
-      forwardedToN8n: false,
-      n8nStatus: null,
-      n8nError: isAbort
-        ? `Timeout ao chamar webhook n8n (${timeoutMs}ms)`
-        : (safeError || 'Falha ao chamar webhook n8n'),
-    };
-  } finally {
-    clearTimeout(abortTimeout);
   }
+
+  return {
+    forwardedToN8n: false,
+    n8nStatus: null,
+    n8nError: 'Falha ao chamar webhook n8n',
+  };
 }
 
 async function persistSupportTicket(payload: SupportPayload, whatsappUrl: string, requestId: string) {

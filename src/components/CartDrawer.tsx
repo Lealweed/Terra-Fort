@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { submitSupportRequest } from '../lib/customerSupport';
+import { getSupportUserFallbackMessage, submitSupportRequest } from '../lib/customerSupport';
 import { getStripeCheckoutAvailability, getStripeCheckoutErrorMessage } from '../lib/cartCheckout';
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY?.trim();
@@ -110,6 +110,8 @@ export default function CartDrawer() {
       },
     });
 
+    const fallbackMessage = getSupportUserFallbackMessage(result);
+    if (fallbackMessage) alert(fallbackMessage);
     window.open(result.whatsappUrl, '_blank');
   };
 
