@@ -1090,9 +1090,9 @@
       "parameters": {
         "model": {
           "__rl": true,
+          "value": "gpt-4o-mini",
           "mode": "list",
-          "value": "qwen2.5-coder:3b",
-          "cachedResultName": "qwen2.5-coder:3b"
+          "cachedResultName": "gpt-4o-mini"
         },
         "options": {}
       },
@@ -1106,8 +1106,8 @@
       "name": "OpenAI Chat Model1",
       "credentials": {
         "openAiApi": {
-          "id": "tgdeLB46ZK0FdvKF",
-          "name": "Ollama via Cloudflare"
+          "id": "lggMd9HUgmLCISvb",
+          "name": "OpenAI account 2"
         }
       },
       "notes": "TEMPLATE DESENVOLVIDO POR RODRIGO ALVES\nwww.youtube.com/@rodrigoalveslps?sub_confirmation=1\n\nCOMUNIDADE PRODUZIMOS IA WHATSAPP\nhttps://chat.whatsapp.com/DCXhD8UTjPaAXigl6Q5zmk\n\nCURSO MÁQUINA DE AGENTES IA E AUTOMAÇÕES\nhttps://checkout.produzimosia.com/OE11373AF"

@@ -4,14 +4,13 @@ import uuid
 import urllib.request
 from pathlib import Path
 
-BASE = os.environ['N8N_BASE_URL'].rstrip('/')
-API_KEY = os.environ['N8N_API_KEY']
-WORKFLOW_ID = 'VlgumFZiwhDe7ZN8'
 ROOT = Path('G:/Terra-Fort')
 
 
 def load_local_env(path: Path):
     vals = {}
+    if not path.exists():
+        return vals
     for line in path.read_text(encoding='utf-8', errors='ignore').splitlines():
         s = line.strip()
         if not s or s.startswith('#') or '=' not in s:
@@ -19,6 +18,13 @@ def load_local_env(path: Path):
         k, v = s.split('=', 1)
         vals[k.strip()] = v.strip().strip('"').strip("'")
     return vals
+
+
+local_env = load_local_env(ROOT / '.env.local')
+
+BASE = os.environ.get('N8N_BASE_URL', local_env.get('N8N_BASE_URL', '')).rstrip('/')
+API_KEY = os.environ.get('N8N_API_KEY', local_env.get('N8N_API_KEY', ''))
+WORKFLOW_ID = 'VlgumFZiwhDe7ZN8'
 
 
 def api_get(url: str):
@@ -184,6 +190,23 @@ def main():
     )
     if '<ContextoSite>' not in system_message:
         agente['parameters']['options']['systemMessage'] = system_message + extra
+
+    try:
+        chat_model_1 = get_node(nodes, 'OpenAI Chat Model1')
+        chat_model_1['credentials'] = {
+            'openAiApi': {
+                'id': 'lggMd9HUgmLCISvb',
+                'name': 'OpenAI account 2'
+            }
+        }
+        chat_model_1['parameters']['model'] = {
+            '__rl': True,
+            'value': 'gpt-4o-mini',
+            'mode': 'list',
+            'cachedResultName': 'gpt-4o-mini'
+        }
+    except KeyError:
+        print("Aviso: 'OpenAI Chat Model1' não encontrado no fluxo.")
 
     payload = {
         'name': wf['name'],
