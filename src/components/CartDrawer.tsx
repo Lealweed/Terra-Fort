@@ -260,64 +260,65 @@ export default function CartDrawer() {
       />
       <div className="fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white z-[110] shadow-[0_0_40px_rgba(0,0,0,0.2)] flex flex-col animate-in slide-in-from-right duration-500 ease-out">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <div className="bg-brand-orange/10 p-2.5 rounded-xl">
-              <ShoppingBag className="w-5 h-5 text-brand-orange" />
+        <div className="px-8 py-8 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-4">
+            <div className="bg-brand-orange/10 p-3 rounded-2xl">
+              <ShoppingBag className="w-6 h-6 text-brand-orange" />
             </div>
             <div>
-              <h2 className="font-heading font-black text-xl text-brand-black tracking-tight leading-none">Meu Carrinho</h2>
-              <p className="text-xs font-bold text-gray-400 mt-1">{cartCount} {cartCount === 1 ? 'item' : 'itens'}</p>
+              <h2 className="font-heading font-black text-2xl text-brand-black tracking-tighter leading-none uppercase">Meu Carrinho</h2>
+              <p className="text-[10px] font-black text-brand-orange mt-2 uppercase tracking-[0.2em]">{cartCount} {cartCount === 1 ? 'item' : 'itens'}</p>
             </div>
           </div>
           <button 
             onClick={() => setIsCartOpen(false)} 
-            className="p-2.5 bg-gray-50 text-gray-400 hover:text-brand-black hover:bg-gray-100 rounded-full transition-all duration-300 active:scale-90 shadow-sm"
+            className="p-3 bg-gray-50 text-gray-400 hover:text-brand-black hover:bg-gray-100 rounded-full transition-all duration-300 active:scale-90"
           >
-            <X className="w-5 h-5" />
+            <X className="w-6 h-6" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50/50 p-4 sm:p-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white p-6 sm:p-8 custom-scrollbar">
           {checkoutStep === 'cart' ? (
             validCartItems.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-6">
-                <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center border-2 border-dashed border-gray-200">
-                  <ShoppingBag className="w-10 h-10 text-gray-300" />
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-8">
+                <div className="w-32 h-32 bg-gray-50 rounded-full flex items-center justify-center border border-dashed border-gray-200 relative">
+                  <ShoppingBag className="w-12 h-12 text-gray-200" />
+                  <div className="absolute inset-0 bg-brand-orange/5 animate-pulse rounded-full" />
                 </div>
                 <div className="text-center">
-                  <p className="font-heading font-bold text-xl text-brand-black mb-2">Seu carrinho está vazio</p>
-                  <p className="text-sm">Que tal adicionar alguns materiais?</p>
+                  <p className="font-heading font-black text-2xl text-brand-black mb-3 uppercase tracking-tight">O carrinho está vazio</p>
+                  <p className="text-xs font-bold uppercase tracking-widest opacity-60">Escolha os melhores materiais para sua obra.</p>
                 </div>
                 <button 
                   onClick={() => setIsCartOpen(false)}
-                  className="px-8 py-3.5 bg-brand-black text-white hover:bg-brand-orange hover:text-brand-black rounded-xl font-bold active:scale-95 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-1"
+                  className="px-10 py-4 bg-brand-black text-white hover:bg-brand-orange hover:text-brand-black rounded-sm font-black uppercase tracking-[0.2em] text-[10px] active:scale-95 transition-all duration-300 shadow-xl hover:-translate-y-1"
                 >
                   Continuar comprando
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {validCartItems.map(item => (
-                  <div key={item.id} className="group flex gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div key={item.id} className="group flex gap-6 p-1 transition-all duration-300">
                     <div 
                       onClick={() => handleProductClick(item.id)}
-                      className="w-24 h-24 bg-gray-50 rounded-xl border border-gray-50 overflow-hidden shrink-0 cursor-pointer relative"
+                      className="w-28 h-28 bg-[#F9F9F9] rounded-sm border border-gray-50 overflow-hidden shrink-0 cursor-pointer relative"
                     >
                       {item.image_url ? (
-                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover mix-blend-multiply group-hover:scale-110 transition-transform duration-500" />
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover mix-blend-multiply group-hover:scale-110 transition-transform duration-700" />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                          <ShoppingBag className="w-6 h-6 opacity-30 mb-1" />
+                          <ShoppingBag className="w-6 h-6 opacity-10" />
                         </div>
                       )}
                     </div>
                     
                     <div className="flex-1 flex flex-col justify-between py-1">
-                      <div className="pr-6 relative">
+                      <div className="pr-8 relative">
                         <h4 
-                          className="font-heading font-bold text-sm text-brand-black line-clamp-2 leading-tight cursor-pointer hover:text-brand-orange transition-colors" 
+                          className="font-heading font-black text-sm md:text-base text-brand-black uppercase tracking-tight line-clamp-2 leading-tight cursor-pointer hover:text-brand-orange transition-colors" 
                           onClick={() => handleProductClick(item.id)}
                         >
                           {item.name}
@@ -325,29 +326,32 @@ export default function CartDrawer() {
                         
                         <button 
                           onClick={() => removeFromCart(item.id)}
-                          className="absolute right-0 top-0 text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all duration-300 -mr-2"
+                          className="absolute right-0 top-0 text-gray-300 hover:text-red-500 p-1 transition-all duration-300"
                           title="Remover item"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
 
-                        <p className="text-[13px] font-black text-brand-orange mt-1.5">
-                          {item.sob_consulta ? 'Sob Consulta' : formatPrice(item.price)}
-                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-[10px] font-black text-brand-orange uppercase">BRL</span>
+                          <p className="text-lg font-heading font-black text-brand-black tracking-tighter">
+                            {item.sob_consulta ? 'Sob Consulta' : formatPrice(item.price).replace('R$', '').trim()}
+                          </p>
+                        </div>
                       </div>
                       
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center bg-gray-50 border border-gray-100 rounded-lg p-0.5">
+                      <div className="flex items-center justify-between mt-4">
+                        <div className="flex items-center bg-gray-50 rounded-sm p-1">
                           <button 
                             onClick={() => updateQuantity(item.id, (item.cartQuantity || 1) - 1)}
-                            className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-brand-black hover:bg-white rounded-md transition-all duration-200"
+                            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-brand-black hover:bg-white transition-all rounded-sm"
                           >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
-                          <span className="text-sm font-bold w-8 text-center text-brand-black">{item.cartQuantity || 1}</span>
+                          <span className="text-xs font-black w-8 text-center text-brand-black">{item.cartQuantity || 1}</span>
                           <button 
                             onClick={() => updateQuantity(item.id, (item.cartQuantity || 1) + 1)}
-                            className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-brand-black hover:bg-white rounded-md transition-all duration-200"
+                            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-brand-black hover:bg-white transition-all rounded-sm"
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
@@ -359,125 +363,95 @@ export default function CartDrawer() {
               </div>
             )
           ) : (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <User className="w-5 h-5 text-brand-orange" />
-                  <h3 className="font-bold text-lg text-brand-black">Dados Pessoais</h3>
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+              <div className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-px bg-brand-orange" />
+                  <h3 className="font-heading font-black text-xl text-brand-black uppercase tracking-tight">Dados de Entrega</h3>
                 </div>
                 
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Nome Completo *</label>
-                  <input 
-                    name="name" 
-                    value={formData.name} 
-                    onChange={handleInputChange} 
-                    type="text" 
-                    placeholder="João da Silva" 
-                    className="w-full px-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-4 focus:ring-brand-orange/10 rounded-xl transition-all"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Celular / WhatsApp *</label>
-                  <input 
-                    name="phone" 
-                    value={formData.phone} 
-                    onChange={handleInputChange} 
-                    type="tel" 
-                    placeholder="(00) 00000-0000" 
-                    className="w-full px-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-4 focus:ring-brand-orange/10 rounded-xl transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <MapPin className="w-5 h-5 text-brand-orange" />
-                  <h3 className="font-bold text-lg text-brand-black">Endereço de Entrega</h3>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">CEP *</label>
-                  <input 
-                    name="cep" 
-                    value={formData.cep} 
-                    onChange={handleInputChange} 
-                    type="text" 
-                    placeholder="00000-000" 
-                    className="w-full px-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-4 focus:ring-brand-orange/10 rounded-xl transition-all"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-8">
-                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Rua / Avenida *</label>
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Nome Completo</label>
                     <input 
-                      name="address" 
-                      value={formData.address} 
+                      name="name" 
+                      value={formData.name} 
                       onChange={handleInputChange} 
                       type="text" 
-                      placeholder="Ex: Rua das Flores" 
-                      className="w-full px-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-4 focus:ring-brand-orange/10 rounded-xl transition-all"
+                      placeholder="JOÃO DA SILVA" 
+                      className="w-full px-5 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-0 rounded-sm font-bold text-sm transition-all"
                     />
                   </div>
-                  <div className="col-span-4">
-                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Número *</label>
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">WhatsApp</label>
                     <input 
-                      name="number" 
-                      value={formData.number} 
+                      name="phone" 
+                      value={formData.phone} 
                       onChange={handleInputChange} 
-                      type="text" 
-                      placeholder="123" 
-                      className="w-full px-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-4 focus:ring-brand-orange/10 rounded-xl transition-all"
+                      type="tel" 
+                      placeholder="(94) 99999-9999" 
+                      className="w-full px-5 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-0 rounded-sm font-bold text-sm transition-all"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-4">
+                    <div className="col-span-12 sm:col-span-8 space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Endereço</label>
+                      <input 
+                        name="address" 
+                        value={formData.address} 
+                        onChange={handleInputChange} 
+                        type="text" 
+                        placeholder="RUA, AVENIDA..." 
+                        className="w-full px-5 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-0 rounded-sm font-bold text-sm transition-all"
+                      />
+                    </div>
+                    <div className="col-span-12 sm:col-span-4 space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Nº</label>
+                      <input 
+                        name="number" 
+                        value={formData.number} 
+                        onChange={handleInputChange} 
+                        type="text" 
+                        placeholder="123" 
+                        className="w-full px-5 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-0 rounded-sm font-bold text-sm transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Bairro</label>
+                      <input 
+                        name="neighborhood" 
+                        value={formData.neighborhood} 
+                        onChange={handleInputChange} 
+                        type="text" 
+                        placeholder="CENTRO" 
+                        className="w-full px-5 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-0 rounded-sm font-bold text-sm transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Cidade</label>
+                      <input 
+                        name="city" 
+                        value={formData.city} 
+                        onChange={handleInputChange} 
+                        type="text" 
+                        placeholder="PARAUAPEBAS" 
+                        className="w-full px-5 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-0 rounded-sm font-bold text-sm transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Complemento</label>
-                  <input 
-                    name="complement" 
-                    value={formData.complement} 
-                    onChange={handleInputChange} 
-                    type="text" 
-                    placeholder="Apto, Bloco, Casa (Opcional)" 
-                    className="w-full px-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-4 focus:ring-brand-orange/10 rounded-xl transition-all"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Bairro *</label>
-                    <input 
-                      name="neighborhood" 
-                      value={formData.neighborhood} 
-                      onChange={handleInputChange} 
-                      type="text" 
-                      placeholder="Centro" 
-                      className="w-full px-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-4 focus:ring-brand-orange/10 rounded-xl transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Cidade *</label>
-                    <input 
-                      name="city" 
-                      value={formData.city} 
-                      onChange={handleInputChange} 
-                      type="text" 
-                      placeholder="São Paulo" 
-                      className="w-full px-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-brand-orange focus:ring-4 focus:ring-brand-orange/10 rounded-xl transition-all"
-                    />
-                  </div>
-                </div>
-
               </div>
               
               <button 
                 onClick={() => setCheckoutStep('cart')}
-                className="w-full py-3 text-sm text-gray-500 hover:text-brand-black font-bold transition-colors text-center"
+                className="w-full py-2 text-[10px] text-gray-400 hover:text-brand-orange font-black uppercase tracking-[0.2em] transition-colors text-center"
               >
-                Voltar para o carrinho
+                ← Voltar para o carrinho
               </button>
             </div>
           )}
@@ -485,25 +459,25 @@ export default function CartDrawer() {
 
         {/* Footer */}
         {validCartItems.length > 0 && (
-          <div className="border-t border-gray-100 p-6 bg-white shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.02)] relative z-10">
-            <div className="flex justify-between items-end mb-5">
-              <span className="text-gray-400 font-bold text-sm uppercase tracking-wider">Subtotal</span>
-              <div className="text-right">
-                <span className="font-heading text-3xl font-black text-brand-black tracking-tight flex items-baseline">
+          <div className="border-t border-gray-100 p-8 bg-white shrink-0 relative z-10">
+            <div className="flex justify-between items-end mb-8">
+              <span className="text-gray-400 font-black text-[10px] uppercase tracking-[0.3em]">Resumo</span>
+              <div className="text-right flex items-baseline gap-2">
+                <span className="text-[10px] font-black text-brand-orange uppercase">BRL</span>
+                <span className="font-heading text-4xl font-black text-brand-black tracking-tighter">
                   {formatPrice(cartTotal).replace('R$', '').trim()}
-                  <span className="text-lg text-gray-400 font-bold ml-1">R$</span>
                 </span>
               </div>
             </div>
             
             {hasSobConsulta && (
-              <div className="mb-5 bg-brand-orange/10 border border-brand-orange/20 rounded-xl p-3 flex items-start gap-3">
-                <div className="bg-brand-orange text-white rounded-full p-1 shrink-0 mt-0.5">
+              <div className="mb-8 bg-brand-orange/5 border border-brand-orange/10 p-4 flex items-start gap-4">
+                <div className="bg-brand-orange text-white p-1 shrink-0 mt-0.5">
                   <MessageCircle className="w-3 h-3" />
                 </div>
-                <p className="text-xs text-brand-black font-medium leading-relaxed">
-                  Seu carrinho contém itens <strong className="font-bold text-brand-orange">sob consulta</strong>. 
-                  O valor final será ajustado no atendimento.
+                <p className="text-[10px] text-brand-black font-bold leading-relaxed uppercase tracking-wider opacity-60">
+                  Carrinho com itens <strong className="font-black text-brand-orange">sob consulta</strong>. 
+                  Ajustaremos o valor final no atendimento.
                 </p>
               </div>
             )}
@@ -511,65 +485,51 @@ export default function CartDrawer() {
             {checkoutStep === 'cart' ? (
               <button 
                 onClick={() => setCheckoutStep('address')}
-                className="group w-full bg-brand-black hover:bg-black text-white flex items-center justify-between py-4 px-6 rounded-xl font-bold transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-black/30 active:scale-95"
+                className="group w-full bg-brand-black hover:bg-brand-orange text-white hover:text-brand-black flex items-center justify-between py-5 px-8 transition-all duration-500 shadow-2xl active:scale-95"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <MapPin className="w-5 h-5 flex-shrink-0" />
-                  <span className="text-lg">Informar Endereço de Entrega</span>
+                  <span className="text-xs font-black uppercase tracking-[0.2em]">Informar Entrega</span>
                 </div>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
               </button>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <button 
                   onClick={handleCheckout}
-                  className="group w-full bg-[#25D366] hover:bg-[#20b858] text-white flex items-center justify-between py-4 px-6 rounded-xl font-bold transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-[#25D366]/30 active:scale-95"
+                  className="group w-full bg-[#25D366] hover:bg-white hover:text-[#25D366] border border-transparent hover:border-[#25D366] text-white flex items-center justify-between py-5 px-8 transition-all duration-500 shadow-xl active:scale-95"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-4">
                     <MessageCircle className="w-5 h-5 flex-shrink-0" />
-                    <span className="text-lg text-left leading-tight">{hasSobConsulta ? 'Solicitar Cotação no Zap' : 'Fechar no Zap'}</span>
+                    <span className="text-xs font-black uppercase tracking-[0.2em]">{hasSobConsulta ? 'Solicitar Orçamento' : 'Fechar no Zap'}</span>
                   </div>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                 </button>
 
                 {!hasSobConsulta && (
-                  <>
-                    {!stripeAvailability.available && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-left">
-                        <p className="text-xs font-semibold text-amber-900 leading-relaxed">
-                          {stripeAvailability.customerMessage}
-                        </p>
-                        {stripeAvailability.operatorMessage && (
-                          <p className="text-[11px] text-amber-800 mt-2 leading-relaxed">
-                            Operação local: {stripeAvailability.operatorMessage}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    <button 
-                      onClick={handleStripeCheckout}
-                      disabled={isStripeLoading || !stripeAvailability.available}
-                      className="group w-full bg-brand-black hover:bg-black text-white flex items-center justify-between py-4 px-6 rounded-xl font-bold transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-black/30 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                      <div className="flex items-center gap-3">
-                        <CreditCard className="w-5 h-5 flex-shrink-0" />
-                        <span className="text-lg text-left leading-tight">
-                          {isStripeLoading ? 'Processando...' : stripeAvailability.available ? 'Pagar Agora (Cartão/Pix)' : 'Pagamento Online Indisponível'}
-                        </span>
-                      </div>
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                  </>
+                  <button 
+                    onClick={handleStripeCheckout}
+                    disabled={isStripeLoading || !stripeAvailability.available}
+                    className="group w-full bg-brand-black hover:bg-white hover:text-brand-black border border-transparent hover:border-brand-black text-white flex items-center justify-between py-5 px-8 transition-all duration-500 shadow-xl active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center gap-4">
+                      <CreditCard className="w-5 h-5 flex-shrink-0" />
+                      <span className="text-xs font-black uppercase tracking-[0.2em]">
+                        {isStripeLoading ? 'Processando...' : 'Pagar Agora'}
+                      </span>
+                    </div>
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+                  </button>
                 )}
               </div>
             )}
             
-            <div className="mt-4 text-center">
+            <div className="mt-8 text-center">
               <button 
                 onClick={clearCart}
-                className="text-xs font-bold text-gray-400 hover:text-red-500 uppercase tracking-wider transition-colors py-2 px-4 rounded-lg hover:bg-red-50"
+                className="text-[9px] font-black text-gray-300 hover:text-red-500 uppercase tracking-[0.3em] transition-colors"
               >
-                Esvaziar carrinho
+                Limpar Tudo
               </button>
             </div>
           </div>

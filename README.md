@@ -93,6 +93,15 @@ Mais detalhes em:
 6. Confirmar variáveis e secrets no ambiente de produção
 7. Validar webhooks Stripe/n8n
 
+## Deploy na Vercel
+1. Conecte o repositório na Vercel.
+2. Use o build padrão definido em `vercel.json`: `npm run build`.
+3. Publique a pasta `dist` como output.
+4. Configure os secrets de produção conforme `docs/env-matrix.md`.
+5. Após publicar, valide os fluxos críticos e os webhooks.
+
+Observação: as rotas serverless em `api/` já estão no formato compatível com a Vercel.
+
 ## Observações
 - O projeto tem histórico de template AI Studio, mas o fluxo atual é Terra-Fort/Supabase/Stripe/n8n.
 - `GEMINI_API_KEY` foi mantida apenas como variável legada no exemplo; hoje não há uso funcional dela no app.
