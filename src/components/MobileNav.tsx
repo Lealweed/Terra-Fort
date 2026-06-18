@@ -1,17 +1,38 @@
-import { Home, ShoppingBag, User, MessageCircle, Menu } from 'lucide-react';
+import { Home, ShoppingBag, User, MessageCircle, Menu, Shield, Truck } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../contexts/CartContext';
 import { motion } from 'motion/react';
+import { supabase } from '../lib/supabase';
+import { useEffect, useState } from 'react';
+import { getUserRoleFromUser, type UserRole } from '../lib/auth';
 
 export default function MobileNav() {
   const location = useLocation();
   const { cartCount, setIsCartOpen } = useCart();
+  const [role, setRole] = useState<UserRole>('unknown');
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setRole(getUserRoleFromUser(data.session?.user));
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setRole(getUserRoleFromUser(session?.user));
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   const navItems = [
     { name: 'Início', path: '/', icon: Home },
     { name: 'Suporte', path: '/suporte', icon: MessageCircle, isAction: true },
-    { name: 'Minha Conta', path: '/portal-cliente', icon: User },
   ];
+
+  if (role === 'admin') {
+    navItems.push({ name: 'Admin', path: '/admin/dashboard', icon: Shield });
+  } else if (role === 'delivery') {
+    navItems.push({ name: 'Entregador', path: '/portal-entregador', icon: Truck });
+  } else {
+    navItems.push({ name: 'Minha Conta', path: '/portal-cliente', icon: User });
+  }
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-4 pb-4">

@@ -4,16 +4,24 @@ import { useCart } from '../contexts/CartContext';
 import { supabase } from '../lib/supabase';
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { getUserRoleFromUser, type UserRole } from '../lib/auth';
 
 export default function Navbar() {
   const { cartCount, setIsCartOpen } = useCart();
   const location = useLocation();
   const [isLogged, setIsLogged] = useState(false);
+  const [role, setRole] = useState<UserRole>('unknown');
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setIsLogged(!!data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => setIsLogged(!!session));
+    supabase.auth.getSession().then(({ data }) => {
+      setIsLogged(!!data.session);
+      setRole(getUserRoleFromUser(data.session?.user));
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLogged(!!session);
+      setRole(getUserRoleFromUser(session?.user));
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -28,11 +36,25 @@ export default function Navbar() {
     await supabase.auth.signOut();
   };
 
-  const navLinks = [
-    { name: 'Cliente', path: '/portal-cliente', icon: Users },
-    { name: 'Entregador', path: '/portal-entregador', icon: Truck },
-    { name: 'Admin', path: '/admin/dashboard', icon: User },
-  ];
+  const navLinks = [];
+  if (!isLogged) {
+    navLinks.push(
+      { name: 'Cliente', path: '/portal-cliente', icon: Users },
+      { name: 'Entregador', path: '/portal-entregador', icon: Truck }
+    );
+  } else {
+    if (role === 'admin') {
+      navLinks.push(
+        { name: 'Cliente', path: '/portal-cliente', icon: Users },
+        { name: 'Entregador', path: '/portal-entregador', icon: Truck },
+        { name: 'Admin', path: '/admin/dashboard', icon: User }
+      );
+    } else if (role === 'delivery') {
+      navLinks.push({ name: 'Entregador', path: '/portal-entregador', icon: Truck });
+    } else {
+      navLinks.push({ name: 'Cliente', path: '/portal-cliente', icon: Users });
+    }
+  }
 
   return (
     <nav 
