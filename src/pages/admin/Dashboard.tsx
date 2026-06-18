@@ -644,14 +644,14 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] text-gray-800 font-sans overflow-hidden">
+    <div className="flex h-screen bg-brand-offwhite architectural-grid text-gray-800 font-sans overflow-hidden">
       {/* SIDEBAR */}
-      <aside className={`${isSidebarOpen ? 'w-72' : 'w-20'} bg-[#0F172A] text-gray-300 flex flex-col shadow-2xl z-30 shrink-0 transition-all duration-300 relative group`}>
+      <aside className={`${isSidebarOpen ? 'w-72' : 'w-20'} bg-[#0F172A] architectural-grid-dark text-gray-300 flex flex-col shadow-2xl z-30 shrink-0 transition-all duration-300 relative group`}>
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="absolute -right-3 top-8 bg-brand-orange hover:bg-orange-600 text-white rounded-full p-1 shadow-md z-40 transition-colors">
           {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
 
-        <div className={`p-6 font-black text-white text-3xl tracking-tighter flex items-center gap-2 border-b border-white/10 ${!isSidebarOpen && 'justify-center p-4'}`}>
+        <div className={`p-6 font-black text-white text-3xl tracking-tighter flex items-center gap-2 border-b border-white/5 ${!isSidebarOpen && 'justify-center p-4'}`}>
           {isSidebarOpen ? (
             <><span className="text-brand-orange">Terra</span>Fort <span className="text-[10px] bg-white/10 px-2 py-1 rounded-full text-gray-400 font-bold uppercase tracking-widest ml-1">Admin</span></>
           ) : (
@@ -664,7 +664,7 @@ export default function Dashboard() {
               key={t.id}
               onClick={() => setActiveTab(t.id as Tab)}
               title={!isSidebarOpen ? t.label : ''}
-              className={`w-full flex items-center gap-3 ${isSidebarOpen ? 'px-4 py-3.5' : 'justify-center p-3.5'} rounded-xl font-bold transition-all duration-300 ${activeTab === t.id ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/30 translate-x-1' : 'hover:bg-white/5 hover:text-white hover:translate-x-1'}`}
+              className={`w-full flex items-center gap-3 ${isSidebarOpen ? 'px-4 py-3.5' : 'justify-center p-3.5'} rounded-xl font-bold transition-all duration-300 ${activeTab === t.id ? 'bg-gradient-to-r from-brand-orange to-orange-600 text-white shadow-lg shadow-brand-orange/35 translate-x-1 border-l-4 border-white' : 'hover:bg-white/5 hover:text-white hover:translate-x-1 border-l-4 border-transparent'}`}
             >
               {t.icon}
               {isSidebarOpen && <span className="whitespace-nowrap">{t.label}</span>}
@@ -683,7 +683,7 @@ export default function Dashboard() {
         {/* Subtle background decoration */}
         <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-brand-orange/5 to-transparent pointer-events-none" />
         
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/80 h-20 flex items-center px-8 shrink-0 shadow-sm z-10 sticky top-0">
+        <header className="bg-white/75 backdrop-blur-xl border-b border-slate-100 h-20 flex items-center px-8 shrink-0 shadow-sm z-10 sticky top-0">
           <h1 className="text-2xl font-black text-gray-900">{TABS_CONFIG.find(t => t.id === activeTab)?.label}</h1>
         </header>
 
@@ -1037,13 +1037,13 @@ function ChartCard({ title, data, color }: { title: string; data: { label: strin
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
-      <h4 className="font-black text-gray-800 mb-6 text-lg">{title}</h4>
+      <h4 className="font-black text-gray-800 mb-6 text-lg tracking-tight">{title}</h4>
       <div className="space-y-4">
         {data.length === 0 && <p className="text-sm text-gray-400 italic">Sem dados suficientes.</p>}
         {data.map((d) => (
           <div key={d.label} className="group">
             <div className="flex justify-between text-sm mb-1.5"><span className="text-gray-600 font-medium group-hover:text-gray-900 transition-colors">{d.label}</span><span className="font-bold text-gray-900">{d.value}</span></div>
-            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
               <div className={`h-full ${color} rounded-full transition-all duration-1000 ease-out`} style={{ width: `${(d.value / max) * 100}%` }} />
             </div>
           </div>
@@ -1055,13 +1055,14 @@ function ChartCard({ title, data, color }: { title: string; data: { label: strin
 
 function Card({ title, value, icon }: { title: string; value: string; icon: ReactNode }) {
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-orange-200 border border-gray-100 flex flex-col gap-4 transition-all duration-300 group">
-      <div className="w-12 h-12 bg-orange-50 text-brand-orange rounded-xl flex items-center justify-center group-hover:bg-brand-orange group-hover:text-white transition-colors duration-300">
+    <div className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 border border-gray-100/80 flex flex-col gap-4 transition-all duration-300 group relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-[3px] bg-brand-orange opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      <div className="w-12 h-12 bg-orange-50 text-brand-orange rounded-xl flex items-center justify-center group-hover:bg-brand-orange group-hover:text-white group-hover:rotate-6 transition-all duration-300">
         {icon}
       </div>
       <div>
-        <p className="text-gray-500 text-sm font-semibold tracking-wide uppercase">{title}</p>
-        <p className="text-3xl font-black text-gray-900 mt-1">{value}</p>
+        <p className="text-gray-500 text-xs font-black tracking-wider uppercase">{title}</p>
+        <p className="text-2xl font-black text-gray-900 mt-1 tracking-tight">{value}</p>
       </div>
     </div>
   );
