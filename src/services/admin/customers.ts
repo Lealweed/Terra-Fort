@@ -54,7 +54,18 @@ export function buildCustomerInsights(customer: AdminCustomerRow | null | undefi
   }
 
   const relatedOrders = orders
-    .filter((order) => order.customer_email === customer.email || order.customer_name === customer.name)
+    .filter((order) => {
+      const matchId = Boolean(customer.id && order.customer_id === customer.id);
+      const matchEmail = Boolean(customer.email && order.customer_email === customer.email);
+      const matchName = Boolean(customer.name && order.customer_name === customer.name);
+      const matchPhone = Boolean(
+        customer.phone &&
+          order.customer_phone &&
+          customer.phone.replace(/\D/g, '') &&
+          customer.phone.replace(/\D/g, '') === order.customer_phone.replace(/\D/g, '')
+      );
+      return matchId || matchEmail || matchName || matchPhone;
+    })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return {

@@ -40,6 +40,42 @@ test('buildCustomerInsights calcula total, receita e último pedido do cliente',
   assert.equal(insights.lastOrderCode, 'TF-002');
 });
 
+test('buildCustomerInsights vincula pedidos por ID de cliente ou telefone formatado', () => {
+  const customerWithId: AdminCustomerRow = {
+    id: 'c-unique-id',
+    customer_kind: 'person',
+    name: 'Nome Diferente',
+    contact_name: null,
+    email: 'outroemail@teste.com',
+    phone: '(85) 97777-0000',
+    document: null,
+    notes: null,
+    is_blocked: false,
+    created_at: '2026-05-01T10:00:00Z',
+  };
+
+  const testOrders: AdminOrderRow[] = [
+    {
+      id: 'o-by-id',
+      order_code: 'TF-999',
+      customer_id: 'c-unique-id',
+      customer_name: 'Antigo Nome',
+      customer_email: 'antigo@teste.com',
+      customer_phone: '85777770000',
+      status: 'Pago',
+      total: 350,
+      payment_status: 'Pago',
+      created_at: '2026-05-06T10:00:00Z',
+      delivery_address: null,
+    },
+  ];
+
+  const insights = buildCustomerInsights(customerWithId, testOrders);
+  assert.equal(insights.totalOrders, 1);
+  assert.equal(insights.totalRevenue, 350);
+  assert.equal(insights.lastOrderCode, 'TF-999');
+});
+
 test('validateCustomerDraft exige nome e ao menos um contato', () => {
   assert.equal(validateCustomerDraft({ customer_kind: 'person', name: '', contact_name: '', email: '', phone: '', document: '', notes: '', is_blocked: false }), 'Nome do cliente é obrigatório.');
   assert.equal(validateCustomerDraft({ customer_kind: 'person', name: 'Cliente', contact_name: '', email: '', phone: '', document: '', notes: '', is_blocked: false }), 'Informe ao menos e-mail ou telefone do cliente.');
