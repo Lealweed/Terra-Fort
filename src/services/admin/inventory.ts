@@ -38,6 +38,39 @@ export function summarizeInventory(products: Pick<ProductRow, 'id' | 'name' | 'c
   };
 }
 
+export function computeReorderSuggestions(
+  products: Pick<ProductRow, 'id' | 'name' | 'category' | 'stock_level' | 'is_active'>[],
+  minThreshold = 5,
+  targetStock = 20
+) {
+  return products
+    .filter((product) => product.is_active && product.stock_level <= minThreshold)
+    .map((product) => ({
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      currentStock: product.stock_level,
+      suggestedReorder: Math.max(0, targetStock - product.stock_level),
+    }));
+}
+
+export function summarizeCategories(
+  products: Pick<ProductRow, 'id' | 'name' | 'category' | 'stock_level' | 'is_active'>[]
+) {
+  const map = new Map<string, { category: string; totalItems: number; outOfStock: number; totalUnits: number }>();
+
+  for (const product of products) {
+    const cat = (product.category || 'Geral').trim();
+    const existing = map.get(cat) || { category: cat, totalItems: 0, outOfStock: 0, totalUnits: 0 };
+    existing.totalItems += 1;
+    if (product.stock_level === 0) existing.outOfStock += 1;
+    existing.totalUnits += Number(product.stock_level || 0);
+    map.set(cat, existing);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.totalItems - a.totalItems);
+}
+
 export async function listInventoryMovements(productId: string): Promise<InventoryMovementRow[]> {
   const supabase = await getSupabase();
   const { data, error } = await supabase
