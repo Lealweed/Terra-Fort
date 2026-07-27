@@ -58,10 +58,10 @@ export default function Navbar() {
 
   return (
     <nav 
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-in-out ${
         isScrolled 
-          ? 'py-3 bg-brand-black/90 backdrop-blur-xl border-b border-white/5 shadow-2xl' 
-          : 'py-6 bg-transparent'
+          ? 'py-3 bg-white/95 backdrop-blur-xl border-b border-gray-200/80 shadow-md' 
+          : 'py-4 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -77,8 +77,8 @@ export default function Navbar() {
                 <div className="absolute -inset-4 bg-brand-orange/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <div className="flex flex-col justify-center leading-none">
-                <span className="text-[16px] md:text-[20px] font-black text-white tracking-[0.25em] transition-colors group-hover:text-brand-orange">TERRA</span>
-                <span className="text-[24px] md:text-[30px] font-black text-brand-orange tracking-widest -mt-1 group-hover:text-white transition-colors">FORT</span>
+                <span className="text-[16px] md:text-[20px] font-black text-brand-black tracking-[0.25em] transition-colors group-hover:text-brand-orange">TERRA</span>
+                <span className="text-[24px] md:text-[30px] font-black text-brand-orange tracking-widest -mt-1 group-hover:text-brand-black transition-colors">FORT</span>
               </div>
             </Link>
 
@@ -90,7 +90,7 @@ export default function Navbar() {
                     key={link.path}
                     to={link.path} 
                     className={`relative px-5 py-2 text-[11px] font-black uppercase tracking-[0.15em] transition-all duration-300 flex items-center gap-2.5 rounded-full group/link ${
-                      isActive ? 'text-brand-orange' : 'text-gray-400 hover:text-white'
+                      isActive ? 'text-brand-orange bg-brand-orange/10' : 'text-slate-600 hover:text-brand-orange hover:bg-slate-50'
                     }`}
                   >
                     <link.icon className={`w-4 h-4 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover/link:scale-110 group-hover/link:text-brand-orange'}`} />
@@ -114,7 +114,7 @@ export default function Navbar() {
               {isLogged ? (
                 <button 
                   onClick={handleLogout} 
-                  className="p-3 text-gray-500 hover:text-brand-orange hover:bg-white/5 rounded-full transition-all active:scale-90"
+                  className="p-3 text-slate-600 hover:text-brand-orange hover:bg-slate-100 rounded-full transition-all active:scale-90"
                   title="Sair"
                 >
                   <LogOut className="w-5 h-5" />
@@ -122,7 +122,7 @@ export default function Navbar() {
               ) : (
                 <Link 
                   to="/login" 
-                  className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-400 hover:text-brand-orange transition-all uppercase tracking-[0.2em]"
+                  className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-slate-600 hover:text-brand-orange transition-all uppercase tracking-[0.2em]"
                 >
                   <LogIn className="w-4 h-4" />
                   <span>Entrar</span>

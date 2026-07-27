@@ -69,7 +69,7 @@ export default function Home() {
   return (
     <div className="w-full bg-brand-offwhite">
       {/* 1. Refined Hero Section - High-Impact & Responsive */}
-      <section className="relative min-h-[80vh] md:h-[95vh] overflow-hidden flex items-center bg-brand-black">
+      <section className="relative min-h-[85vh] md:min-h-[92vh] pt-12 md:pt-20 pb-16 md:pb-24 overflow-hidden flex flex-col justify-center bg-brand-black">
         {/* Background Layer */}
         <div className="absolute inset-0 z-0">
           <video 
@@ -88,17 +88,17 @@ export default function Home() {
         </div>
 
         {/* Content Layer */}
-        <div className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 md:px-24">
+        <div className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-12 md:px-24 pt-6 md:pt-10">
           <motion.div 
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
             className="max-w-4xl"
           >
-            <span className="text-brand-orange text-[10px] md:text-xs font-black uppercase tracking-[0.6em] mb-6 block opacity-90">
+            <span className="text-brand-orange text-[10px] md:text-xs font-black uppercase tracking-[0.6em] mb-4 md:mb-6 block opacity-90">
               Parauapebas · Região do Carajás
             </span>
-            <h1 className="text-[12vw] sm:text-7xl md:text-9xl lg:text-[10rem] font-black text-white uppercase tracking-tighter leading-[0.8] mb-8 text-balance">
+            <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-[7.5rem] font-black text-white uppercase tracking-tighter leading-[0.88] mb-6 md:mb-8 text-balance">
               {homeContent?.heroTitle || (
                 <>
                   FORÇA E <br />
